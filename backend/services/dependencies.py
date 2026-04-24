@@ -11,6 +11,7 @@ from repositories.impl.atlas_search_repository import AtlasSearchRepository
 from repositories.impl.vector_search_repository import VectorSearchRepository
 from repositories.impl.scan_rules_repository import ScanRulesRepository
 from repositories.impl.url_graph_repository import URLGraphRepository
+from services.agentic_analysis_service import AgenticAnalysisService
 from services.url_analysis_service import URLAnalysisService
 from services.url_graph_service import URLGraphService
 from services.search.atlas_search_service import AtlasSearchService
@@ -98,6 +99,7 @@ _vector_search_svc: VectorSearchService | None = None
 _hybrid_search_svc: HybridSearchService | None = None
 _unified_search_svc: UnifiedSearchService | None = None
 _url_analysis_svc: URLAnalysisService | None = None
+_agentic_analysis_svc: AgenticAnalysisService | None = None
 
 
 def get_atlas_search_service() -> AtlasSearchService:
@@ -143,6 +145,13 @@ def get_url_analysis_service() -> URLAnalysisService:
             graph_service=get_url_graph_service(),
         )
     return _url_analysis_svc
+
+
+def get_agentic_analysis_service() -> AgenticAnalysisService:
+    global _agentic_analysis_svc
+    if _agentic_analysis_svc is None:
+        _agentic_analysis_svc = AgenticAnalysisService(get_url_analysis_service())
+    return _agentic_analysis_svc
 
 
 _url_graph_repo: URLGraphRepository | None = None

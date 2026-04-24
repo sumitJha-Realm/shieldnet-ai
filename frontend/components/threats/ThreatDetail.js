@@ -51,6 +51,22 @@ export default function ThreatDetail({ threat, onClose, onStatusChange }) {
           </div>
         </div>
 
+        {/* Status Note */}
+        {threat.statusNote && (
+          <div style={{
+            padding: '12px 16px', borderRadius: 8, marginBottom: 20,
+            background: threat.status === 'blocked' ? '#FFEAE5'
+              : threat.status === 'allowed' ? '#E3FCF7' : '#FFF8E6',
+            border: `1px solid ${threat.status === 'blocked' ? '#CF4A22'
+              : threat.status === 'allowed' ? '#00684A' : '#944F01'}33`,
+            fontSize: 13, fontWeight: 600,
+            color: threat.status === 'blocked' ? '#CF4A22'
+              : threat.status === 'allowed' ? '#00684A' : '#944F01',
+          }}>
+            ⚠ {threat.statusNote}
+          </div>
+        )}
+
         {/* Summary */}
         <div style={{
           padding: 16, borderRadius: 8, background: '#F5F6F7',

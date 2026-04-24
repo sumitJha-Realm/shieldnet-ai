@@ -1,5 +1,6 @@
 """URL feature extraction and analysis utilities."""
 
+import hashlib
 import math
 import re
 import logging
@@ -130,7 +131,17 @@ def extract_features(url: str) -> dict:
     payload_types = detect_payload_types(url)
 
     # Simulate dynamic features (in production these would come from real lookups)
-    domain_age_days = random.randint(1, 3650)
+    # Domain age: deterministic based on domain hash so the same domain always
+    # gets the same age.  Suspicious TLDs skew younger (1–365 days), well-known
+    # TLDs skew older (180–3650 days), others use full range.
+    _WELL_KNOWN_TLDS = {".com", ".org", ".net", ".edu", ".gov", ".io", ".co", ".us", ".uk", ".in"}
+    domain_hash = int(hashlib.md5(domain.encode()).hexdigest(), 16)
+    if has_suspicious_tld:
+        domain_age_days = (domain_hash % 365) + 1        # 1–365 days
+    elif any(domain.endswith(t) for t in _WELL_KNOWN_TLDS):
+        domain_age_days = (domain_hash % 3470) + 180     # 180–3650 days
+    else:
+        domain_age_days = (domain_hash % 3650) + 1       # 1–3650 days
     ssl_valid = random.random() > 0.3 if not has_suspicious_tld else random.random() > 0.7
     is_shared_hosting = random.random() > 0.5
     is_cloud_hosted = random.random() > 0.6
@@ -400,15 +411,15 @@ def calculate_risk_score(
     """
     if weights is None:
         weights = {
-            "domainAge": 0.03,
+            "domainAge": 0.10,
             "ssl": 0.03,
             "entropy": 0.05,
             "dns": 0.05,
             "hosting": 0.03,
-            "vectorSimilarity": 0.18,
-            "dgaScore": 0.10,
+            "vectorSimilarity": 0.15,
+            "dgaScore": 0.08,
             "structuralScore": 0.10,
-            "homoglyphScore": 0.10,
+            "homoglyphScore": 0.08,
             "brandImpersonation": 0.15,
             "payloadRisk": 0.18,
         }
@@ -417,16 +428,22 @@ def calculate_risk_score(
     us = features["urlStructure"]
     dns = features["dnsStatus"]
 
-    # Domain age score (younger = riskier)
+    # Domain age score (younger = riskier) — granular tiers
     age = hf["domainAgeDays"]
-    if age < 30:
-        domain_age_score = 1.0
+    if age < 7:
+        domain_age_score = 1.0      # less than a week — very suspicious
+    elif age < 30:
+        domain_age_score = 0.9      # less than a month
+    elif age < 90:
+        domain_age_score = 0.7      # less than 3 months
     elif age < 180:
-        domain_age_score = 0.7
+        domain_age_score = 0.5      # less than 6 months
     elif age < 365:
-        domain_age_score = 0.4
+        domain_age_score = 0.3      # less than a year
+    elif age < 730:
+        domain_age_score = 0.15     # 1-2 years
     else:
-        domain_age_score = 0.1
+        domain_age_score = 0.05     # 2+ years — well-established
 
     # SSL score
     ssl_score = 0.0 if hf["sslValid"] else 1.0
@@ -567,6 +584,21 @@ def calculate_risk_score(
     hf_map = hard_floors or {}
     if homoglyph and homoglyph.get("hasHomoglyphs") and homoglyph.get("visualSimilarity", 0) >= 0.6:
         risk = max(risk, float(hf_map.get("homoglyphVisualSimilarity", 75)))
+
+    # Hard floor: young domain (<30 days) combined with other threat signals
+    if age < 30:
+        threat_signals = sum([
+            bool(payload_types),          # has attack payloads
+            bool(keyword_hits),           # has phishing keywords
+            not hf["sslValid"],           # no SSL
+            us.get("hasSuspiciousTld", False),  # suspicious TLD
+            homoglyph_risk > 0,           # homoglyph detected
+            brand_risk > 0,               # brand impersonation
+        ])
+        if age < 7 and threat_signals >= 1:
+            risk = max(risk, float(hf_map.get("youngDomain7d", 65)))
+        elif age < 30 and threat_signals >= 2:
+            risk = max(risk, float(hf_map.get("youngDomain30d", 55)))
 
     # Hard floor: brand impersonation (typosquat) of a known government domain
     if brand and not brand.get("is_exact_match"):

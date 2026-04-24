@@ -28,12 +28,14 @@ A full-stack security platform for **NIC (National Informatics Centre)** that us
 - Poetry (`pip install poetry`)
 - MongoDB Atlas cluster with Search enabled
 - Voyage AI API key
+- Microsoft Foundry API key for agentic scan mode
 
 ### 1. Clone & Configure
 
 ```bash
 cp .env.example .env
 # Edit .env with your MongoDB URI and Voyage AI key
+# Optional: also add your Foundry endpoint/key for Pipeline + Foundry scan mode
 ```
 
 ### 2. Backend Setup
@@ -123,6 +125,7 @@ docker-compose up --build
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/v1/scan` | Analyze a URL |
+| `POST` | `/api/v1/scan/agentic` | Analyze a URL and add Foundry reasoning |
 | `GET` | `/api/v1/urls` | List URLs |
 | `GET` | `/api/v1/urls/:id` | URL detail |
 | `PATCH` | `/api/v1/urls/:id/status` | Update status |

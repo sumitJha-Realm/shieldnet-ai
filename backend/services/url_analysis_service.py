@@ -187,7 +187,27 @@ class URLAnalysisService:
         now = datetime.utcnow()
         payload_types = features.get("payloadTypes", [])
         scan_count = (existing_record.get("scanCount", 0) + 1) if existing_record else 1
-        status_val = "blocked" if risk >= block_score else ("under_review" if risk >= review_score else "allowed")
+        computed_status = "blocked" if risk >= block_score else ("under_review" if risk >= review_score else "allowed")
+
+        # ── Status lock: on exact URL re-scan, preserve the previous status ──
+        status_override_note = None
+        if existing_record and existing_record.get("status"):
+            prev_status = existing_record["status"]
+            status_val = prev_status  # keep the authoritative status
+            if prev_status != computed_status:
+                _status_labels = {
+                    "blocked": "blocked by authorities",
+                    "under_review": "under review by authorities",
+                    "allowed": "allowed by authorities",
+                }
+                status_override_note = (
+                    f"This URL was previously {_status_labels.get(prev_status, prev_status)}. "
+                    f"The current scan produced a score of {risk}/100 "
+                    f"(which would normally be '{computed_status}'), but the authoritative "
+                    f"status of '{prev_status}' has been preserved."
+                )
+        else:
+            status_val = computed_status
         summary_text = build_summary_text(
             url, features,
             classification=classification,
@@ -227,6 +247,7 @@ class URLAnalysisService:
             "firstSeenAt": existing_record.get("firstSeenAt", now) if existing_record else now,
             "lastSeenAt": now,
             "relatedDomains": [],    # populated by graph service
+            "statusNote": status_override_note,
             "createdAt": existing_record.get("createdAt", now) if existing_record else now,
             "updatedAt": now,
         }
@@ -262,7 +283,7 @@ class URLAnalysisService:
             except Exception as e:
                 logger.warning("Graph edge creation failed: %s", e)
 
-        return {
+        result = {
             "urlRecord": record,
             "similarThreats": similar_threats,
             "threatIntelMatches": threat_intel_matches,
@@ -276,6 +297,10 @@ class URLAnalysisService:
                 rules=rules,
             ),
         }
+        if status_override_note:
+            result["statusOverrideNote"] = status_override_note
+            result["analysisSummary"]["statusOverrideNote"] = status_override_note
+        return result
 
     @staticmethod
     def _slim_doc(doc, extra_fields=None):
@@ -582,8 +607,18 @@ class URLAnalysisService:
         url_doc = await self._url_repo.find_by_id(url_id)
         if url_doc:
             self._cache.invalidate(url_doc.get("url", ""))
+        _status_labels = {
+            "blocked": "Blocked by authorities",
+            "under_review": "Flagged for review by authorities",
+            "allowed": "Approved by authorities",
+        }
+        status_note = _status_labels.get(status, f"Status set to {status}")
         return await self._url_repo.update_one(
-            url_id, {"status": status, "updatedAt": datetime.utcnow()}
+            url_id, {
+                "status": status,
+                "statusNote": status_note,
+                "updatedAt": datetime.utcnow(),
+            }
         )
 
     def get_cache_stats(self) -> dict:

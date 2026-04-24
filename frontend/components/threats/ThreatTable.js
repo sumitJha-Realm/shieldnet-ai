@@ -96,11 +96,23 @@ export default function ThreatTable({ urls, onRowClick }) {
                   </td>
                   <td style={{ padding: '10px 16px' }}>{url.dnsStatus}</td>
                   <td style={{ padding: '10px 16px' }}>
-                    <span style={{
-                      padding: '2px 8px', borderRadius: 4,
-                      fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
-                      background: status.bg, color: status.color,
-                    }}>{url.status}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{
+                        padding: '2px 8px', borderRadius: 4,
+                        fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+                        background: status.bg, color: status.color,
+                        alignSelf: 'flex-start',
+                      }}>{url.status}</span>
+                      {url.statusNote && (
+                        <span style={{
+                          fontSize: 10, color: '#5C6C75', fontStyle: 'italic',
+                          maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }} title={url.statusNote}>
+                          {url.statusNote}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td style={{ padding: '10px 16px', color: '#5C6C75', fontSize: 12 }}>
                     {url.createdAt ? new Date(url.createdAt).toLocaleDateString() : '—'}

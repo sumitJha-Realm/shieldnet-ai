@@ -2,7 +2,8 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from models.url_analysis import URLScanRequest
-from services.dependencies import get_url_analysis_service
+from services.agentic_analysis_service import AgenticAnalysisService
+from services.dependencies import get_agentic_analysis_service, get_url_analysis_service
 from services.url_analysis_service import URLAnalysisService
 
 router = APIRouter(tags=["URL Scanner"])
@@ -17,6 +18,18 @@ async def scan_url(
     try:
         result = await service.scan_url(request.url)
         return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/scan/agentic")
+async def scan_url_agentic(
+    request: URLScanRequest,
+    service: AgenticAnalysisService = Depends(get_agentic_analysis_service),
+):
+    """Submit a URL for deterministic scan plus Foundry reasoning."""
+    try:
+        return await service.scan_url(request.url)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -21,16 +21,17 @@ DEFAULT_SCAN_RULES: dict = {
 
     # ── Risk scoring weights (must sum to ~1.0) ─────────────────────
     "riskWeights": {
-        "domainAge": 0.06,
-        "ssl": 0.06,
-        "entropy": 0.06,
-        "dns": 0.06,
-        "hosting": 0.06,
-        "vectorSimilarity": 0.16,
-        "dgaScore": 0.12,
-        "structuralScore": 0.12,
-        "homoglyphScore": 0.12,
-        "brandImpersonation": 0.18,
+        "domainAge": 0.10,
+        "ssl": 0.03,
+        "entropy": 0.05,
+        "dns": 0.05,
+        "hosting": 0.03,
+        "vectorSimilarity": 0.15,
+        "dgaScore": 0.08,
+        "structuralScore": 0.10,
+        "homoglyphScore": 0.08,
+        "brandImpersonation": 0.15,
+        "payloadRisk": 0.18,
     },
 
     # ── Thresholds ──────────────────────────────────────────────────
@@ -52,6 +53,8 @@ DEFAULT_SCAN_RULES: dict = {
         "brandDist2": 60,
         "brandDist2WithKeywords": 72,
         "brandDist3WithKeywords": 55,
+        "youngDomain7d": 65,
+        "youngDomain30d": 55,
     },
 
     # ── Phishing keywords ───────────────────────────────────────────

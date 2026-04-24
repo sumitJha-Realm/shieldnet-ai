@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import AgenticPanel from '../../components/scanner/AgenticPanel';
 import URLInput from '../../components/scanner/URLInput';
 import RiskGauge from '../../components/scanner/RiskGauge';
 import FeatureBreakdown from '../../components/scanner/FeatureBreakdown';
@@ -8,7 +9,7 @@ import SimilarThreats from '../../components/scanner/SimilarThreats';
 import MatchedEvidence from '../../components/scanner/MatchedEvidence';
 import ThreatGraph from '../../components/scanner/ThreatGraph';
 import RiskBreakdownChart from '../../components/scanner/RiskBreakdownChart';
-import { scanURL, updateURLStatus } from '../../lib/api';
+import { scanAgenticURL, scanURL, updateURLStatus } from '../../lib/api';
 
 /* ── STATUS_PILL colours ─────────────────────────────────────────── */
 const DOC_STATUS_COLORS = {
@@ -199,13 +200,14 @@ export default function ScanPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [scanMode, setScanMode] = useState('agentic');
 
   const handleScan = async (url) => {
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      const res = await scanURL(url);
+      const res = scanMode === 'agentic' ? await scanAgenticURL(url) : await scanURL(url);
       setResult(res.data);
     } catch (err) {
       setError(err.response?.data?.detail || 'Scan failed. Ensure the backend is running.');
@@ -216,10 +218,13 @@ export default function ScanPage() {
 
   const handleStatusChange = async (id, status) => {
     try {
-      await updateURLStatus(id, status);
+      const res = await updateURLStatus(id, status);
+      const updatedRecord = res.data || {};
+      const statusNote = updatedRecord.statusNote || null;
       setResult(prev => ({
         ...prev,
-        urlRecord: { ...prev.urlRecord, status },
+        urlRecord: { ...prev.urlRecord, status, statusNote },
+        statusOverrideNote: null,
       }));
     } catch (err) {
       console.error('Status update failed:', err);
@@ -237,6 +242,42 @@ export default function ScanPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        alignSelf: 'flex-start',
+        padding: 6,
+        background: '#F5F6F7',
+        borderRadius: 999,
+        border: '1px solid #E8EDEB',
+      }}>
+        {[
+          { key: 'agentic', label: 'Pipeline + Foundry' },
+          { key: 'pipeline', label: 'Pipeline only' },
+        ].map((mode) => {
+          const active = scanMode === mode.key;
+          return (
+            <button
+              key={mode.key}
+              onClick={() => setScanMode(mode.key)}
+              style={{
+                border: 'none',
+                borderRadius: 999,
+                padding: '10px 16px',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                background: active ? '#1A1C1E' : 'transparent',
+                color: active ? '#fff' : '#5C6C75',
+              }}
+            >
+              {mode.label}
+            </button>
+          );
+        })}
+      </div>
+
       <URLInput onSubmit={handleScan} loading={loading} />
 
       {error && (
@@ -251,6 +292,26 @@ export default function ScanPage() {
 
       {result && (
         <>
+          {/* Status Note Banner — shows when URL has an authoritative status note */}
+          {(result.statusOverrideNote || rec.statusNote) && (
+            <div style={{
+              padding: '14px 20px', borderRadius: 10,
+              background: rec.status === 'blocked' ? '#FFEAE5'
+                : rec.status === 'allowed' ? '#E3FCF7' : '#FFF8E6',
+              border: `1px solid ${rec.status === 'blocked' ? '#CF4A22'
+                : rec.status === 'allowed' ? '#00684A' : '#944F01'}44`,
+              display: 'flex', alignItems: 'center', gap: 10,
+              fontSize: 13, fontWeight: 600,
+              color: rec.status === 'blocked' ? '#CF4A22'
+                : rec.status === 'allowed' ? '#00684A' : '#944F01',
+            }}>
+              <span style={{ fontSize: 18, flexShrink: 0 }}>
+                {rec.status === 'blocked' ? '🔒' : rec.status === 'allowed' ? '✅' : '📋'}
+              </span>
+              <span>{result.statusOverrideNote || rec.statusNote}</span>
+            </div>
+          )}
+
           {/* Threat Status Banner */}
           {rec.status === 'blocked' && (
             <div style={{
@@ -360,9 +421,25 @@ export default function ScanPage() {
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 24 }}>
-            <RiskGauge score={rec.riskScore} level={result.riskLevel} />
-            <FeatureBreakdown urlRecord={rec} />
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: result.agenticAnalysis ? 'minmax(0, 1.1fr) minmax(320px, 0.9fr)' : 'minmax(0, 1fr)',
+            gap: 24,
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 24 }}>
+                <RiskGauge score={rec.riskScore} level={result.riskLevel} />
+                <FeatureBreakdown urlRecord={rec} />
+              </div>
+            </div>
+
+            {result.agenticAnalysis && (
+              <AgenticPanel
+                pipelineScore={rec.riskScore}
+                pipelineStatus={rec.status}
+                agenticAnalysis={result.agenticAnalysis}
+              />
+            )}
           </div>
 
           {/* Risk Score Breakdown Chart */}
