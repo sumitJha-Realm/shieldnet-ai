@@ -28,12 +28,16 @@ class VectorSearchRepository(SearchRepositoryInterface):
     async def test_index(self, index_name: str) -> dict:
         """Test Vector Search index by running a dummy query."""
         try:
+            # Use a normalised unit vector — Atlas rejects all-zero vectors
+            # for cosine similarity.
+            dim = 1024
+            unit_vec = [1.0 / dim] * dim
             pipeline = [
                 {
                     "$vectorSearch": {
                         "index": index_name,
                         "path": "embedding",
-                        "queryVector": [0.0] * 1024,
+                        "queryVector": unit_vec,
                         "numCandidates": 10,
                         "limit": 1,
                     }

@@ -187,7 +187,7 @@ def random_date(start_days_ago: int = 180, end_days_ago: int = 0) -> datetime:
     )
 
 
-def build_xss_url() -> tuple[str, str, str]:
+def build_xss_url() -> tuple[str, str, str, str, str]:
     """Legit domain + XSS payload in query param."""
     domain = random.choice(LEGIT_DOMAINS)
     path = random.choice(LEGIT_PATHS)
@@ -195,10 +195,10 @@ def build_xss_url() -> tuple[str, str, str]:
     payload = random.choice(XSS_PAYLOADS)
     url = f"https://{domain}{path}?{param_name}={urllib.parse.quote(payload)}"
     desc = f"XSS injection attempt via '{param_name}' parameter on {domain}{path}. Payload attempts to exfiltrate cookies/session data to external attacker-controlled server."
-    return url, desc, "malware"
+    return url, desc, "malware", "xss", domain
 
 
-def build_sqli_url() -> tuple[str, str, str]:
+def build_sqli_url() -> tuple[str, str, str, str, str]:
     """Legit domain + SQL injection in query param."""
     domain = random.choice(LEGIT_DOMAINS)
     path = random.choice(LEGIT_PATHS)
@@ -206,10 +206,10 @@ def build_sqli_url() -> tuple[str, str, str]:
     payload = random.choice(SQLI_PAYLOADS)
     url = f"https://{domain}{path}?{param_name}={urllib.parse.quote(payload)}"
     desc = f"SQL injection attempt targeting {domain}{path} via '{param_name}' parameter. Payload tries to extract sensitive data or manipulate database queries on the government portal."
-    return url, desc, "malware"
+    return url, desc, "malware", "sqli", domain
 
 
-def build_path_traversal_url() -> tuple[str, str, str]:
+def build_path_traversal_url() -> tuple[str, str, str, str, str]:
     """Legit domain + path traversal to access system files."""
     domain = random.choice(LEGIT_DOMAINS)
     path_prefix = random.choice(["/download/file", "/api/v1/document", "/static/resource", "/export/report", "/attachment/view"])
@@ -217,10 +217,10 @@ def build_path_traversal_url() -> tuple[str, str, str]:
     param = random.choice(["file", "path", "doc", "name", "resource", "template"])
     url = f"https://{domain}{path_prefix}?{param}={urllib.parse.quote(payload)}"
     desc = f"Path traversal attack on {domain} attempting to read system files via '{param}' parameter. Attacker tries to escape web root and access /etc/passwd or other sensitive OS files."
-    return url, desc, "malware"
+    return url, desc, "malware", "path_traversal", domain
 
 
-def build_cmd_injection_url() -> tuple[str, str, str]:
+def build_cmd_injection_url() -> tuple[str, str, str, str, str]:
     """Legit domain + command injection in parameters."""
     domain = random.choice(LEGIT_DOMAINS)
     path = random.choice(["/api/v1/ping", "/tools/lookup", "/admin/diagnostic", "/services/check", "/api/health"])
@@ -228,10 +228,10 @@ def build_cmd_injection_url() -> tuple[str, str, str]:
     payload = random.choice(CMD_INJECTION_PAYLOADS)
     url = f"https://{domain}{path}?{param}={urllib.parse.quote(payload)}"
     desc = f"OS command injection attempt on {domain}{path} via '{param}' parameter. Payload attempts remote code execution or reverse shell to attacker infrastructure."
-    return url, desc, "c2"
+    return url, desc, "c2", "command_injection", domain
 
 
-def build_open_redirect_url() -> tuple[str, str, str]:
+def build_open_redirect_url() -> tuple[str, str, str, str, str]:
     """Legit domain with redirect to phishing site."""
     domain = random.choice(LEGIT_DOMAINS)
     redirect_param = random.choice(["redirect", "url", "next", "return", "goto", "continue", "redir", "returnUrl", "target", "dest"])
@@ -239,10 +239,10 @@ def build_open_redirect_url() -> tuple[str, str, str]:
     target = random.choice(REDIRECT_PAYLOADS)
     url = f"https://{domain}{path}?{redirect_param}={urllib.parse.quote(target)}"
     desc = f"Open redirect on {domain} abused to redirect government employees to phishing site {target.split('/')[2]}. Legitimate SSO/auth flow hijacked to harvest credentials."
-    return url, desc, "phishing"
+    return url, desc, "phishing", "open_redirect", domain
 
 
-def build_ssrf_url() -> tuple[str, str, str]:
+def build_ssrf_url() -> tuple[str, str, str, str, str]:
     """Legit domain + SSRF payload to probe internal networks."""
     domain = random.choice(LEGIT_DOMAINS)
     path = random.choice(["/api/v1/fetch", "/proxy/load", "/webhook/test", "/import/url", "/preview/link"])
@@ -250,19 +250,19 @@ def build_ssrf_url() -> tuple[str, str, str]:
     payload = random.choice(SSRF_PAYLOADS)
     url = f"https://{domain}{path}?{param}={urllib.parse.quote(payload)}"
     desc = f"SSRF attack via {domain}{path} attempting to access internal infrastructure through '{param}' parameter. Targets cloud metadata endpoints or internal services."
-    return url, desc, "c2"
+    return url, desc, "c2", "ssrf", domain
 
 
-def build_obfuscated_path_url() -> tuple[str, str, str]:
+def build_obfuscated_path_url() -> tuple[str, str, str, str, str]:
     """Legit domain with encoded/obfuscated suspicious paths."""
     domain = random.choice(LEGIT_DOMAINS)
     path = random.choice(OBFUSCATED_PATHS)
     url = f"https://{domain}{path}"
     desc = f"Obfuscated path access on {domain} using encoded characters to bypass WAF/filters. Attempts to access sensitive configuration files, admin panels, or debug endpoints."
-    return url, desc, random.choice(["malware", "c2"])
+    return url, desc, random.choice(["malware", "c2"]), "obfuscated_path", domain
 
 
-def build_b64_payload_url() -> tuple[str, str, str]:
+def build_b64_payload_url() -> tuple[str, str, str, str, str]:
     """Legit domain with base64-encoded malicious payload in params."""
     domain = random.choice(LEGIT_DOMAINS)
     path = random.choice(LEGIT_PATHS)
@@ -270,10 +270,10 @@ def build_b64_payload_url() -> tuple[str, str, str]:
     payload = random.choice(B64_PAYLOADS)
     url = f"https://{domain}{path}?{param}={payload}"
     desc = f"Base64-encoded malicious payload submitted to {domain}{path} via '{param}' parameter. Decoded content contains script injection or remote code execution attempt."
-    return url, desc, random.choice(["malware", "c2"])
+    return url, desc, random.choice(["malware", "c2"]), "base64_payload", domain
 
 
-def build_credential_harvest_url() -> tuple[str, str, str]:
+def build_credential_harvest_url() -> tuple[str, str, str, str, str]:
     """Legit domain lookalike with credential-stealing form action."""
     domain = random.choice(LEGIT_DOMAINS)
     path = random.choice(["/login", "/auth/verify", "/ekyc/otp", "/registration/new"])
@@ -287,10 +287,10 @@ def build_credential_harvest_url() -> tuple[str, str, str]:
     ])
     url = f"https://{domain}{path}?{exfil}&session={random.randint(100000, 999999)}"
     desc = f"Credential harvesting attempt using {domain}{path} with suspicious form action parameter pointing to attacker-controlled domain. Intercepts login credentials submitted by government employees."
-    return url, desc, "phishing"
+    return url, desc, "phishing", "credential_harvest", domain
 
 
-def build_malware_download_url() -> tuple[str, str, str]:
+def build_malware_download_url() -> tuple[str, str, str, str, str]:
     """Legit domain path leading to suspicious file downloads."""
     domain = random.choice(LEGIT_DOMAINS)
     suspicious_files = [
@@ -303,10 +303,10 @@ def build_malware_download_url() -> tuple[str, str, str]:
     path = random.choice(["/download/attachment", "/documents/circular", "/notices/latest", "/forms/pdf", "/uploads/shared"])
     url = f"https://{domain}{path}/{file}?token={random.randbytes(8).hex()}"
     desc = f"Suspicious executable disguised as government document on {domain}. File '{file}' has double extension or executable format masquerading as a legitimate document download."
-    return url, desc, "malware"
+    return url, desc, "malware", "malware_download", domain
 
 
-def build_typosquat_subdomain_url() -> tuple[str, str, str]:
+def build_typosquat_subdomain_url() -> tuple[str, str, str, str, str]:
     """Legit-looking domain with suspicious subdomain prefix."""
     domain = random.choice(LEGIT_DOMAINS)
     suspicious_sub = random.choice([
@@ -318,7 +318,88 @@ def build_typosquat_subdomain_url() -> tuple[str, str, str]:
     path = random.choice(LEGIT_PATHS)
     url = f"https://{suspicious_sub}.{domain}{path}"
     desc = f"Suspicious subdomain '{suspicious_sub}' prepended to legitimate domain {domain}. Social engineering tactic to create urgency and trick government employees into providing credentials."
-    return url, desc, "phishing"
+    return url, desc, "phishing", "typosquat_subdomain", domain
+
+
+def build_dns_tunneling_url() -> tuple[str, str, str, str, str]:
+    """URLs with DNS tunneling / data exfiltration patterns."""
+    domain = random.choice(LEGIT_DOMAINS)
+    # DNS tunneling encodes data in long subdomain labels
+    encoded_data = ''.join(random.choices("abcdef0123456789", k=random.randint(30, 60)))
+    chunks = [encoded_data[i:i+15] for i in range(0, len(encoded_data), 15)]
+    tunnel_domain = ".".join(chunks) + f".dns-tunnel-{random.randint(1,99)}.xyz"
+    path = random.choice(["/api/v1/resolve", "/dns/lookup", "/network/check"])
+    param = random.choice(["host", "target", "resolve", "query"])
+    url = f"https://{domain}{path}?{param}={tunnel_domain}"
+    desc = f"DNS tunneling attempt via {domain}{path} using encoded subdomain labels to exfiltrate data through DNS queries. Long hex-encoded subdomain chain '{'.'.join(chunks[:2])}...' indicates covert data channel to attacker nameserver."
+    return url, desc, "c2", "dns_tunneling", domain
+
+
+def build_cryptomining_url() -> tuple[str, str, str, str, str]:
+    """URLs injecting cryptomining scripts."""
+    domain = random.choice(LEGIT_DOMAINS)
+    miners = [
+        "coinhive.min.js", "cryptonight.wasm", "deepMiner.js",
+        "coin-hive.com/lib/coinhive.min.js", "webmr.js",
+        "miner.start()", "crypto-loot.com/lib/miner.min.js",
+    ]
+    miner = random.choice(miners)
+    path = random.choice(["/assets/js", "/static/scripts", "/cdn/lib", "/resources/vendor"])
+    url = f"https://{domain}{path}/{miner}?v={random.randint(1,99)}"
+    desc = f"Cryptomining script injection on {domain}. Malicious JavaScript miner '{miner}' hijacks visitor CPU cycles for unauthorized cryptocurrency mining. Commonly injected via compromised CMS or supply chain attack."
+    return url, desc, "malware", "cryptomining", domain
+
+
+def build_api_abuse_url() -> tuple[str, str, str, str, str]:
+    """URLs targeting API endpoints for data extraction."""
+    domain = random.choice(LEGIT_DOMAINS)
+    api_endpoints = [
+        "/api/v1/users/export?format=csv&limit=999999",
+        "/api/v2/records/bulk-download?all=true",
+        "/graphql?query={users{email,aadhaar,phone,pan}}",
+        "/api/internal/admin/dump?table=citizens",
+        "/rest/v1/search?q=*&fields=name,mobile,aadhaar&size=10000",
+        "/api/v1/beneficiaries/list?state=all&download=true",
+        "/odata/v1/PersonalData?$select=Name,PAN,Phone&$top=50000",
+    ]
+    endpoint = random.choice(api_endpoints)
+    url = f"https://{domain}{endpoint}"
+    desc = f"API abuse attempt on {domain} — mass data extraction via {endpoint.split('?')[0]}. Unauthorized bulk query designed to exfiltrate citizen PII (Aadhaar, PAN, phone numbers) from government database API endpoints."
+    return url, desc, "malware", "api_abuse", domain
+
+
+def build_supply_chain_url() -> tuple[str, str, str, str, str]:
+    """URLs mimicking compromised package repositories or CDNs."""
+    domain = random.choice(LEGIT_DOMAINS)
+    packages = [
+        "npm/gov-auth-helper/1.0.1/index.js",
+        "pypi/aadhaar-utils/2.3.0/aadhaar_utils.tar.gz",
+        "maven/in.gov.common/auth-sdk/3.1.0/auth-sdk.jar",
+        "cdn/jquery-3.6.1.min.js",  # typosquat of 3.6.0
+        "gems/rails-gov-toolkit-0.9.1.gem",
+        "nuget/GovPortal.Auth/1.2.3/GovPortal.Auth.nupkg",
+    ]
+    pkg = random.choice(packages)
+    url = f"https://{domain}/vendor/{pkg}?integrity=sha384-{random.randbytes(12).hex()}"
+    desc = f"Supply chain attack via compromised package on {domain}. Backdoored dependency '{pkg.split('/')[1]}' injected into government portal build pipeline. Package contains obfuscated reverse shell that activates on import."
+    return url, desc, "malware", "supply_chain", domain
+
+
+def build_watering_hole_url() -> tuple[str, str, str, str, str]:
+    """URLs representing compromised legitimate sites targeting gov users."""
+    domain = random.choice(LEGIT_DOMAINS)
+    watering_paths = [
+        "/news/latest-circular.html",
+        "/events/annual-conference-2024.html",
+        "/downloads/training-material.html",
+        "/resources/policy-update.html",
+        "/announcements/recruitment-notification.html",
+    ]
+    path = random.choice(watering_paths)
+    exploit_kit = random.choice(["RIG", "Magnitude", "Fallout", "GreenFlash", "Underminer"])
+    url = f"https://{domain}{path}?utm_source=email&ref={random.randbytes(6).hex()}"
+    desc = f"Watering hole attack on {domain}{path}. Legitimate government page compromised with {exploit_kit} exploit kit. Targets government employees visiting routine pages — iframe injection redirects to drive-by download payload."
+    return url, desc, "malware", "watering_hole", domain
 
 
 # All URL generators with their relative weights
@@ -334,23 +415,113 @@ URL_GENERATORS = [
     (build_credential_harvest_url, 100),
     (build_malware_download_url, 80),
     (build_typosquat_subdomain_url, 80),
+    (build_dns_tunneling_url, 60),
+    (build_cryptomining_url, 60),
+    (build_api_abuse_url, 60),
+    (build_supply_chain_url, 50),
+    (build_watering_hole_url, 50),
 ]
 
 
+# Severity mapping by attack category
+ATTACK_SEVERITY = {
+    "xss": "high",
+    "sqli": "critical",
+    "path_traversal": "high",
+    "command_injection": "critical",
+    "open_redirect": "medium",
+    "ssrf": "critical",
+    "obfuscated_path": "medium",
+    "base64_payload": "high",
+    "credential_harvest": "high",
+    "malware_download": "critical",
+    "typosquat_subdomain": "medium",
+    "dns_tunneling": "critical",
+    "cryptomining": "high",
+    "api_abuse": "critical",
+    "supply_chain": "critical",
+    "watering_hole": "critical",
+}
+
+# TTL (days) by severity — critical threats persist longer
+SEVERITY_TTL = {
+    "critical": 180,
+    "high": 120,
+    "medium": 90,
+    "low": 30,
+}
+
+
 def generate_feed_entry() -> dict:
-    """Generate a single threat intel feed entry."""
+    """Generate a single threat intel feed entry with enriched metadata."""
     generators, weights = zip(*URL_GENERATORS)
     gen_func = random.choices(generators, weights=weights, k=1)[0]
-    url, description, threat_type = gen_func()
+    url, description, threat_type, attack_category, target_domain = gen_func()
 
-    return {
-        "feedName": random.choice(FEED_NAMES),
+    severity = ATTACK_SEVERITY.get(attack_category, "medium")
+    reported_date = random_date(180)
+
+    feed_name = random.choice(FEED_NAMES)
+    confidence = round(random.uniform(0.7, 0.99), 2)
+    last_verified = random_date(start_days_ago=30, end_days_ago=0)
+
+    # Extract domain from URL
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    domain = parsed.hostname or ""
+
+    entry = {
+        # ── Core fields (shared with scan docs) ──────────────────────
         "url": url,
-        "reportedDate": random_date(180),
-        "threatType": threat_type,
-        "description": description,
+        "domain": domain,
+        "docType": "threat_intel",
+        "source": f"threat_feed:{feed_name}",
+        "submissionDate": reported_date,
+        "dnsStatus": "active",
+        "hostingFlags": {
+            "isSharedHosting": False,
+            "isCloudHosted": True,
+            "hostingProvider": "unknown",
+            "geoLocation": "unknown",
+            "sslValid": url.startswith("https"),
+            "domainAgeDays": 365,
+        },
+        "urlStructure": {
+            "pathDepth": url.count("/") - 2,
+            "hasIpAddress": False,
+            "hasSuspiciousTld": False,
+            "entropyScore": 0.0,
+            "containsEncodedChars": "%" in url,
+            "subdomainCount": 0,
+        },
+        "threatClassification": threat_type,
+        "riskScore": 90.0,
+        "status": "blocked",
+        "reviewedBy": f"threat_feed:{feed_name}",
+        "summaryText": "",  # populated below
         "embedding": None,
+        "payloadTypes": [attack_category],
+        "scanCount": 0,
+        "firstSeenAt": reported_date,
+        "lastSeenAt": last_verified,
+        "createdAt": reported_date,
+        "updatedAt": datetime.utcnow(),
+        # ── Threat-intel-specific metadata ────────────────────────────
+        "feedName": feed_name,
+        "description": description,
+        "attackCategory": attack_category,
+        "targetDomain": target_domain,
+        "payloadSignature": attack_category,
+        "severity": severity,
+        "confidence": confidence,
+        "lastVerifiedAt": last_verified,
+        "iocType": "url",
+        "ttl": SEVERITY_TTL.get(severity, 90),
     }
+    # Build composite text from all fields and store it
+    from utils.url_feature_extractor import build_threat_intel_text
+    entry["summaryText"] = build_threat_intel_text(entry)
+    return entry
 
 
 async def seed_threat_intel():
@@ -358,12 +529,12 @@ async def seed_threat_intel():
     client = AsyncIOMotorClient(MONGODB_URI)
     db = client[DB_NAME]
 
-    # Drop only threat_intel_feeds (preserve urls and threat_logs)
-    await db.drop_collection("threat_intel_feeds")
-    logger.info("Dropped collection: threat_intel_feeds")
+    # Remove existing threat intel entries from urls collection
+    del_result = await db["urls"].delete_many({"docType": "threat_intel"})
+    logger.info("Removed %d existing threat_intel entries from urls collection", del_result.deleted_count)
 
-    # Generate 1030 entries (slight over 1000 for good measure)
-    NUM_ENTRIES = 1030
+    # Generate 1300 entries (more diversity with 16 generators)
+    NUM_ENTRIES = 1300
     feeds = [generate_feed_entry() for _ in range(NUM_ENTRIES)]
 
     # Deduplicate by URL
@@ -384,15 +555,16 @@ async def seed_threat_intel():
         logger.info("Generating embeddings via Voyage AI...")
         import httpx
 
-        descriptions = [f["description"] for f in feeds]
+        from utils.url_feature_extractor import build_threat_intel_text
+        embed_texts = [f["summaryText"] for f in feeds]
         batch_size = 128
         all_embeddings = []
 
         try:
             async with httpx.AsyncClient() as http_client:
-                for i in range(0, len(descriptions), batch_size):
-                    batch = descriptions[i : i + batch_size]
-                    logger.info("  Embedding batch %d-%d of %d", i + 1, i + len(batch), len(descriptions))
+                for i in range(0, len(embed_texts), batch_size):
+                    batch = embed_texts[i : i + batch_size]
+                    logger.info("  Embedding batch %d-%d of %d", i + 1, i + len(batch), len(embed_texts))
                     resp = await http_client.post(
                         "https://ai.mongodb.com/v1/embeddings",
                         headers={
@@ -414,20 +586,20 @@ async def seed_threat_intel():
     else:
         logger.warning("Skipping embeddings — inserting records without embeddings.")
 
-    # Insert in batches
+    # Insert into urls collection (unified)
     batch_size = 200
     total_inserted = 0
     for i in range(0, len(feeds), batch_size):
         batch = feeds[i : i + batch_size]
-        await db["threat_intel_feeds"].insert_many(batch)
+        await db["urls"].insert_many(batch)
         total_inserted += len(batch)
         logger.info("Inserted batch: %d/%d", total_inserted, len(feeds))
 
-    logger.info("Inserted %d threat intel feed entries total", total_inserted)
+    logger.info("Inserted %d threat intel entries into urls collection", total_inserted)
 
     # Print attack type breakdown
     from collections import Counter
-    type_counts = Counter(f["threatType"] for f in feeds)
+    type_counts = Counter(f["threatClassification"] for f in feeds)
     logger.info("Threat type breakdown: %s", dict(type_counts))
 
     # Print generator breakdown using description heuristics
@@ -456,7 +628,21 @@ async def seed_threat_intel():
             attack_types["Malware Download"] += 1
         elif "subdomain" in desc:
             attack_types["Typosquat Subdomain"] += 1
+        elif "dns tunnel" in desc:
+            attack_types["DNS Tunneling"] += 1
+        elif "cryptomin" in desc or "miner" in desc:
+            attack_types["Cryptomining"] += 1
+        elif "api abuse" in desc or "bulk" in desc or "mass data" in desc:
+            attack_types["API Abuse"] += 1
+        elif "supply chain" in desc or "backdoor" in desc:
+            attack_types["Supply Chain"] += 1
+        elif "watering hole" in desc or "exploit kit" in desc:
+            attack_types["Watering Hole"] += 1
     logger.info("Attack category breakdown: %s", dict(attack_types))
+
+    # Indexes live on the urls collection (url_vector_index already exists)
+    # No need to create separate threat_intel indexes
+    logger.info("Threat intel entries use the existing url_vector_index on urls collection")
 
     client.close()
     logger.info("Threat intel seeding complete!")

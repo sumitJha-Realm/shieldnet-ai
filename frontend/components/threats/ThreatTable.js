@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 const STATUS_BADGE = {
   blocked: { bg: '#FFEAE5', color: '#CF4A22' },
   allowed: { bg: '#E3FCF7', color: '#00684A' },
@@ -15,6 +17,16 @@ const THREAT_BADGE = {
 };
 
 export default function ThreatTable({ urls, onRowClick }) {
+  const [copiedId, setCopiedId] = useState(null);
+
+  const handleCopy = (e, url) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(url.url).then(() => {
+      setCopiedId(url._id);
+      setTimeout(() => setCopiedId(null), 1500);
+    });
+  };
+
   return (
     <div style={{
       background: '#fff', borderRadius: 12,
@@ -50,8 +62,26 @@ export default function ThreatTable({ urls, onRowClick }) {
                   onMouseEnter={e => e.currentTarget.style.background = '#F9FAFB'}
                   onMouseLeave={e => e.currentTarget.style.background = ''}
                 >
-                  <td style={{ padding: '10px 16px', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {url.url}
+                  <td style={{ padding: '10px 16px', maxWidth: 280 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+                        {url.url}
+                      </span>
+                      <button
+                        onClick={(e) => handleCopy(e, url)}
+                        title="Copy URL"
+                        style={{
+                          flexShrink: 0, border: 'none', background: 'none',
+                          cursor: 'pointer', padding: '2px 4px', borderRadius: 4,
+                          fontSize: 14, lineHeight: 1, color: copiedId === url._id ? '#00684A' : '#889397',
+                          transition: 'color .15s',
+                        }}
+                        onMouseEnter={e => { if (copiedId !== url._id) e.currentTarget.style.color = '#016BF8'; }}
+                        onMouseLeave={e => { if (copiedId !== url._id) e.currentTarget.style.color = '#889397'; }}
+                      >
+                        {copiedId === url._id ? '✓' : '📋'}
+                      </button>
+                    </div>
                   </td>
                   <td style={{ padding: '10px 16px' }}>{url.domain}</td>
                   <td style={{ padding: '10px 16px' }}>

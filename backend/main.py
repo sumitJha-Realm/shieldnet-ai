@@ -13,11 +13,13 @@ load_dotenv()
 from routes.core.url_scanner import router as url_scanner_router
 from routes.core.threat_management import router as threat_mgmt_router
 from routes.core.enricher import router as enricher_router
+from routes.core.scan_rules import router as scan_rules_router
+from routes.core.url_graph import router as url_graph_router
 from routes.search.atlas_search import router as atlas_search_router
 from routes.search.vector_search import router as vector_search_router
 from routes.search.unified_search import router as unified_search_router
 from routes.debug.search_debug import router as debug_router
-from services.dependencies import close_mongo_client, get_database
+from services.dependencies import close_mongo_client, get_database, get_url_graph_service
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,6 +34,8 @@ async def lifespan(app: FastAPI):
     logger.info("ShieldNet AI backend starting up...")
     db = get_database()
     logger.info("Connected to database: %s", db.name)
+    await get_url_graph_service().ensure_indexes()
+    logger.info("Graph indexes ensured")
     yield
     # Shutdown
     await close_mongo_client()
@@ -59,6 +63,8 @@ app.add_middleware(
 app.include_router(url_scanner_router, prefix="/api/v1")
 app.include_router(threat_mgmt_router, prefix="/api/v1")
 app.include_router(enricher_router, prefix="/api/v1")
+app.include_router(scan_rules_router, prefix="/api/v1")
+app.include_router(url_graph_router, prefix="/api/v1")
 app.include_router(atlas_search_router, prefix="/api/v1/search")
 app.include_router(vector_search_router, prefix="/api/v1/search")
 app.include_router(unified_search_router, prefix="/api/v1/search")

@@ -58,6 +58,16 @@ class URLRecord(BaseModel):
     reviewedBy: str = "system_ai"
     summaryText: str = ""
     embedding: Optional[list[float]] = None
+    # ── New metadata fields ──────────────────────────────────────────
+    queryParams: dict = Field(default_factory=dict)
+    payloadTypes: list[str] = Field(default_factory=list)
+    redirectChain: Optional[dict] = None
+    tlsCertificate: Optional[dict] = None
+    whoisData: Optional[dict] = None
+    scanCount: int = 1
+    firstSeenAt: Optional[datetime] = None
+    lastSeenAt: Optional[datetime] = None
+    relatedDomains: list[str] = Field(default_factory=list)
     createdAt: datetime = Field(default_factory=datetime.utcnow)
     updatedAt: datetime = Field(default_factory=datetime.utcnow)
 
@@ -76,6 +86,12 @@ class ThreatLog(BaseModel):
     deviceType: str = "desktop"
     ipRegion: str = ""
     aiConfidence: float = 0.0
+    # ── New metadata fields ──────────────────────────────────────────
+    riskScore: float = 0.0
+    threatClassification: str = ""
+    triggerReasons: list[str] = Field(default_factory=list)
+    scanTier: str = ""
+    responseTimeMs: float = 0.0
 
     class Config:
         populate_by_name = True
@@ -88,7 +104,17 @@ class ThreatIntelFeed(BaseModel):
     reportedDate: datetime = Field(default_factory=datetime.utcnow)
     threatType: str = "phishing"
     description: str = ""
+    summaryText: str = ""
     embedding: Optional[list[float]] = None
+    # ── New metadata fields ──────────────────────────────────────────
+    attackCategory: str = ""
+    targetDomain: str = ""
+    payloadSignature: str = ""
+    severity: str = "medium"
+    confidence: float = 0.8
+    lastVerifiedAt: Optional[datetime] = None
+    iocType: str = "url"
+    ttl: int = 90
 
     class Config:
         populate_by_name = True

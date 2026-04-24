@@ -9,8 +9,10 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from repositories.impl.url_repository import URLRepository
 from repositories.impl.atlas_search_repository import AtlasSearchRepository
 from repositories.impl.vector_search_repository import VectorSearchRepository
-from repositories.impl.threat_intel_repository import ThreatIntelRepository
+from repositories.impl.scan_rules_repository import ScanRulesRepository
+from repositories.impl.url_graph_repository import URLGraphRepository
 from services.url_analysis_service import URLAnalysisService
+from services.url_graph_service import URLGraphService
 from services.search.atlas_search_service import AtlasSearchService
 from services.search.vector_search_service import VectorSearchService
 from services.search.hybrid_search_service import HybridSearchService
@@ -56,7 +58,6 @@ def get_database() -> AsyncIOMotorDatabase:
 _url_repo: URLRepository | None = None
 _atlas_search_repo: AtlasSearchRepository | None = None
 _vector_search_repo: VectorSearchRepository | None = None
-_threat_intel_repo: ThreatIntelRepository | None = None
 
 
 def get_url_repository() -> URLRepository:
@@ -80,11 +81,14 @@ def get_vector_search_repository() -> VectorSearchRepository:
     return _vector_search_repo
 
 
-def get_threat_intel_repository() -> ThreatIntelRepository:
-    global _threat_intel_repo
-    if _threat_intel_repo is None:
-        _threat_intel_repo = ThreatIntelRepository(get_database())
-    return _threat_intel_repo
+_scan_rules_repo: ScanRulesRepository | None = None
+
+
+def get_scan_rules_repository() -> ScanRulesRepository:
+    global _scan_rules_repo
+    if _scan_rules_repo is None:
+        _scan_rules_repo = ScanRulesRepository(get_database())
+    return _scan_rules_repo
 
 
 # --- Service singletons ---
@@ -134,10 +138,29 @@ def get_url_analysis_service() -> URLAnalysisService:
         _url_analysis_svc = URLAnalysisService(
             get_url_repository(),
             get_vector_search_service(),
-            get_threat_intel_repository(),
             get_waterfall_cache(),
+            rules_repo=get_scan_rules_repository(),
+            graph_service=get_url_graph_service(),
         )
     return _url_analysis_svc
+
+
+_url_graph_repo: URLGraphRepository | None = None
+_url_graph_svc: URLGraphService | None = None
+
+
+def get_url_graph_repository() -> URLGraphRepository:
+    global _url_graph_repo
+    if _url_graph_repo is None:
+        _url_graph_repo = URLGraphRepository(get_database())
+    return _url_graph_repo
+
+
+def get_url_graph_service() -> URLGraphService:
+    global _url_graph_svc
+    if _url_graph_svc is None:
+        _url_graph_svc = URLGraphService(get_url_graph_repository())
+    return _url_graph_svc
 
 
 async def close_mongo_client():

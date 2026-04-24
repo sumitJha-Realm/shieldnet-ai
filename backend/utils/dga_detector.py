@@ -317,7 +317,7 @@ def compute_structural_threat_score(url: str, domain: str) -> dict:
         scores.append(0.7)
 
     # ── Suspicious query patterns ────────────────────────────────────────
-    if re.search(r"(cmd|exec|system|eval|wget|curl|bash)\s*=", lower):
+    if re.search(r"(cmd|exec|system|eval|wget|curl|bash)\s*=", lower) or re.search(r";\s*(cat|ls|ping|whoami|id|wget|curl)\s", lower) or re.search(r"\|\s*(wget|curl|bash|sh)\s", lower) or re.search(r"\$\([^)]+\)", url):
         signals.append("Command injection keywords in query parameters")
         bypasses.append("command_injection")
         scores.append(0.95)
@@ -327,10 +327,22 @@ def compute_structural_threat_score(url: str, domain: str) -> dict:
         bypasses.append("xss_payload")
         scores.append(0.9)
 
-    if re.search(r"(union\s+select|or\s+1\s*=\s*1|drop\s+table)", lower):
+    if re.search(r"(union\s+select|'\s*or\s|or\s+1\s*=\s*1|drop\s+table|select\s+.*\s+from|sleep\s*\(|waitfor\s+delay)", lower):
         signals.append("SQL injection patterns detected in URL")
         bypasses.append("sql_injection")
         scores.append(0.95)
+
+    # ── SSRF patterns ────────────────────────────────────────────────────
+    if re.search(r"(169\.254\.169\.254|localhost|127\.0\.0\.1|\[::1\]|metadata\.google|internal-api|gopher://|dict://)", lower):
+        signals.append("SSRF patterns detected — internal resource access attempt")
+        bypasses.append("ssrf")
+        scores.append(0.95)
+
+    # ── Credential harvesting ────────────────────────────────────────────
+    if re.search(r"(formAction|webhook|postback|callback)\s*=\s*https?://", lower):
+        signals.append("Credential harvesting redirect detected")
+        bypasses.append("credential_harvest")
+        scores.append(0.85)
 
     # ── Excessive subdomains (DNS tunneling / C2) ────────────────────────
     subdomain_count = len(domain.split(".")) - 2

@@ -5,7 +5,195 @@ import URLInput from '../../components/scanner/URLInput';
 import RiskGauge from '../../components/scanner/RiskGauge';
 import FeatureBreakdown from '../../components/scanner/FeatureBreakdown';
 import SimilarThreats from '../../components/scanner/SimilarThreats';
+import MatchedEvidence from '../../components/scanner/MatchedEvidence';
+import ThreatGraph from '../../components/scanner/ThreatGraph';
+import RiskBreakdownChart from '../../components/scanner/RiskBreakdownChart';
 import { scanURL, updateURLStatus } from '../../lib/api';
+
+/* ── STATUS_PILL colours ─────────────────────────────────────────── */
+const DOC_STATUS_COLORS = {
+  blocked:      { bg: '#FFEAE5', color: '#CF4A22' },
+  under_review: { bg: '#FFF8E6', color: '#944F01' },
+  allowed:      { bg: '#E3FCF7', color: '#00684A' },
+};
+
+/* ── Inline matched‑document card for a single reason ────────────── */
+function ReasonDocCard({ doc }) {
+  const sc = DOC_STATUS_COLORS[doc.status] || DOC_STATUS_COLORS.allowed;
+  const isIntel = !!doc.feedName;
+
+  return (
+    <div style={{
+      padding: '8px 12px', borderRadius: 8,
+      background: '#FAFBFC', border: '1px solid #E8EDEB',
+      display: 'flex', alignItems: 'center', gap: 10,
+      fontSize: 12,
+    }}>
+      <span style={{ fontSize: 14, flexShrink: 0 }}>{isIntel ? '📡' : '📄'}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontWeight: 600, color: '#1a1c1e',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {doc.url}
+        </div>
+        <div style={{ fontSize: 11, color: '#5C6C75', marginTop: 1 }}>
+          {isIntel
+            ? `${doc.feedName || '—'} · ${doc.threatType || '—'}`
+            : `${doc.domain || '—'} · ${doc.threatClassification || '—'} · Risk: ${doc.riskScore ?? '—'}`
+          }
+          {doc.brandImpersonation && !doc.brandImpersonation.is_exact_match && doc.brandImpersonation.edit_distance > 0 && (
+            ` · Brand: ${doc.brandImpersonation.closest_brand} (dist ${doc.brandImpersonation.edit_distance})`
+          )}
+          {doc.dgaAnalysis?.isDGA && ` · DGA ${(doc.dgaAnalysis.dgaScore * 100).toFixed(0)}%`}
+        </div>
+        {isIntel && doc.description && (
+          <div style={{ fontSize: 10, color: '#889397', marginTop: 2, lineHeight: 1.4 }}>
+            {doc.description.substring(0, 140)}{doc.description.length > 140 ? '…' : ''}
+          </div>
+        )}
+      </div>
+      {doc.status && (
+        <span style={{
+          padding: '2px 8px', borderRadius: 10,
+          background: sc.bg, color: sc.color,
+          fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap',
+        }}>
+          {doc.status.replace('_', ' ').toUpperCase()}
+        </span>
+      )}
+      {doc.score != null && (
+        <span style={{
+          padding: '2px 8px', borderRadius: 10,
+          background: '#E8EDEB', color: '#016BF8',
+          fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap',
+        }}>
+          {(doc.score * 100).toFixed(1)}%
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ── Single expandable reason row ────────────────────────────────── */
+function ReasonRow({ reason, status }) {
+  const [expanded, setExpanded] = useState(false);
+  // Support both new structured { text, matchedDocs } and legacy string reasons
+  const text = typeof reason === 'string' ? reason : reason.text;
+  const docs = (typeof reason === 'object' && reason.matchedDocs) || [];
+  const hasDocs = docs.length > 0;
+  const isSubReason = text?.startsWith('  ↳');
+
+  const bgMap  = { blocked: '#FFF5F5', under_review: '#FFF8E6' };
+  const brdMap = { blocked: '#FFC9B9', under_review: '#FFE5A0' };
+  const dotMap = { blocked: '#CF4A22', under_review: '#944F01' };
+  const symMap = { blocked: '●', under_review: '▲' };
+
+  return (
+    <div>
+      <div
+        onClick={hasDocs ? () => setExpanded(e => !e) : undefined}
+        style={{
+          padding: '10px 14px', borderRadius: 8,
+          background: bgMap[status] || '#F5F6F7',
+          border: `1px solid ${brdMap[status] || '#E8EDEB'}`,
+          fontSize: 13, color: '#3D4F58', lineHeight: 1.5,
+          display: 'flex', alignItems: 'flex-start', gap: 8,
+          cursor: hasDocs ? 'pointer' : 'default',
+        }}
+      >
+        {!isSubReason && (
+          <span style={{ color: dotMap[status] || '#5C6C75', fontWeight: 700, flexShrink: 0 }}>
+            {symMap[status] || '○'}
+          </span>
+        )}
+        <span style={{ flex: 1 }}>{text}</span>
+        {hasDocs && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            padding: '2px 8px', borderRadius: 10,
+            background: '#E8EDEB', color: '#016BF8',
+            fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
+            transition: 'transform .2s',
+          }}>
+            📂 {docs.length} doc{docs.length > 1 ? 's' : ''}
+            <span style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0)', display: 'inline-block', transition: 'transform .2s' }}>▾</span>
+          </span>
+        )}
+      </div>
+      {expanded && hasDocs && (
+        <div style={{
+          marginTop: 4, marginLeft: 24,
+          display: 'flex', flexDirection: 'column', gap: 4,
+        }}>
+          <div style={{
+            fontSize: 10, fontWeight: 600, color: '#889397',
+            padding: '4px 0', textTransform: 'uppercase', letterSpacing: '0.5px',
+          }}>
+            Matched MongoDB Documents
+          </div>
+          {docs.map((doc, j) => (
+            <ReasonDocCard key={doc._id || j} doc={doc} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Full Analysis Summary block ─────────────────────────────────── */
+function AnalysisSummary({ reasons, riskFactors, status }) {
+  return (
+    <div style={{
+      background: '#fff', borderRadius: 12, padding: 24,
+      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+    }}>
+      <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: '#1a1c1e' }}>
+        Analysis Summary
+      </h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {reasons.map((reason, i) => (
+          <ReasonRow key={i} reason={reason} status={status} />
+        ))}
+      </div>
+      {/* Risk factor badges */}
+      {riskFactors && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+          {riskFactors.vectorSimilarity > 0 && (
+            <span style={{ padding: '4px 10px', borderRadius: 16, background: '#E8EDEB', fontSize: 11, color: '#3D4F58', fontWeight: 600 }}>
+              Vector Similarity: {riskFactors.vectorSimilarity}%
+            </span>
+          )}
+          {riskFactors.threatIntelHits > 0 && (
+            <span style={{ padding: '4px 10px', borderRadius: 16, background: '#FFEAE5', fontSize: 11, color: '#CF4A22', fontWeight: 600 }}>
+              Intel Hits: {riskFactors.threatIntelHits}
+            </span>
+          )}
+          {riskFactors.blockedSimilar > 0 && (
+            <span style={{ padding: '4px 10px', borderRadius: 16, background: '#FFEAE5', fontSize: 11, color: '#DB3030', fontWeight: 600 }}>
+              Blocked Matches: {riskFactors.blockedSimilar}
+            </span>
+          )}
+          {riskFactors.dgaDetected && (
+            <span style={{ padding: '4px 10px', borderRadius: 16, background: '#FFEAE5', fontSize: 11, color: '#CF4A22', fontWeight: 600 }}>
+              ⚙️ DGA Detected
+            </span>
+          )}
+          {riskFactors.homoglyphDetected && (
+            <span style={{ padding: '4px 10px', borderRadius: 16, background: '#FFF8E6', fontSize: 11, color: '#944F01', fontWeight: 600 }}>
+              👁️ Homoglyph Attack
+            </span>
+          )}
+          {riskFactors.bypassTechniques?.length > 0 && (
+            <span style={{ padding: '4px 10px', borderRadius: 16, background: '#FFEAE5', fontSize: 11, color: '#CF4A22', fontWeight: 600 }}>
+              🛡️ {riskFactors.bypassTechniques.length} Bypass(es)
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ScanPage() {
   const [loading, setLoading] = useState(false);
@@ -130,65 +318,11 @@ export default function ScanPage() {
 
           {/* Analysis Summary — why it was flagged */}
           {result.analysisSummary?.reasons?.length > 0 && (
-            <div style={{
-              background: '#fff', borderRadius: 12, padding: 24,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-            }}>
-              <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: '#1a1c1e' }}>
-                Analysis Summary
-              </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {result.analysisSummary.reasons.map((reason, i) => (
-                  <div key={i} style={{
-                    padding: '10px 14px', borderRadius: 8,
-                    background: rec.status === 'blocked' ? '#FFF5F5' : rec.status === 'under_review' ? '#FFF8E6' : '#F5F6F7',
-                    border: `1px solid ${rec.status === 'blocked' ? '#FFC9B9' : rec.status === 'under_review' ? '#FFE5A0' : '#E8EDEB'}`,
-                    fontSize: 13, color: '#3D4F58', lineHeight: 1.5,
-                    display: 'flex', alignItems: 'flex-start', gap: 8,
-                  }}>
-                    <span style={{ color: rec.status === 'blocked' ? '#CF4A22' : rec.status === 'under_review' ? '#944F01' : '#5C6C75', fontWeight: 700, flexShrink: 0 }}>
-                      {rec.status === 'blocked' ? '●' : rec.status === 'under_review' ? '▲' : '○'}
-                    </span>
-                    {reason}
-                  </div>
-                ))}
-              </div>
-              {/* Risk factor badges */}
-              {result.analysisSummary.riskFactors && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
-                  {result.analysisSummary.riskFactors.vectorSimilarity > 0 && (
-                    <span style={{ padding: '4px 10px', borderRadius: 16, background: '#E8EDEB', fontSize: 11, color: '#3D4F58', fontWeight: 600 }}>
-                      Vector Similarity: {result.analysisSummary.riskFactors.vectorSimilarity}%
-                    </span>
-                  )}
-                  {result.analysisSummary.riskFactors.threatIntelHits > 0 && (
-                    <span style={{ padding: '4px 10px', borderRadius: 16, background: '#FFEAE5', fontSize: 11, color: '#CF4A22', fontWeight: 600 }}>
-                      Intel Hits: {result.analysisSummary.riskFactors.threatIntelHits}
-                    </span>
-                  )}
-                  {result.analysisSummary.riskFactors.blockedSimilar > 0 && (
-                    <span style={{ padding: '4px 10px', borderRadius: 16, background: '#FFEAE5', fontSize: 11, color: '#DB3030', fontWeight: 600 }}>
-                      Blocked Matches: {result.analysisSummary.riskFactors.blockedSimilar}
-                    </span>
-                  )}
-                  {result.analysisSummary.riskFactors.dgaDetected && (
-                    <span style={{ padding: '4px 10px', borderRadius: 16, background: '#FFEAE5', fontSize: 11, color: '#CF4A22', fontWeight: 600 }}>
-                      ⚙️ DGA Detected
-                    </span>
-                  )}
-                  {result.analysisSummary.riskFactors.homoglyphDetected && (
-                    <span style={{ padding: '4px 10px', borderRadius: 16, background: '#FFF8E6', fontSize: 11, color: '#944F01', fontWeight: 600 }}>
-                      👁️ Homoglyph Attack
-                    </span>
-                  )}
-                  {result.analysisSummary.riskFactors.bypassTechniques?.length > 0 && (
-                    <span style={{ padding: '4px 10px', borderRadius: 16, background: '#FFEAE5', fontSize: 11, color: '#CF4A22', fontWeight: 600 }}>
-                      🛡️ {result.analysisSummary.riskFactors.bypassTechniques.length} Bypass(es)
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
+            <AnalysisSummary
+              reasons={result.analysisSummary.reasons}
+              riskFactors={result.analysisSummary.riskFactors}
+              status={rec.status}
+            />
           )}
 
           {/* Recommended Action */}
@@ -230,6 +364,11 @@ export default function ScanPage() {
             <RiskGauge score={rec.riskScore} level={result.riskLevel} />
             <FeatureBreakdown urlRecord={rec} />
           </div>
+
+          {/* Risk Score Breakdown Chart */}
+          {result.riskBreakdown && result.riskBreakdown.length > 0 && (
+            <RiskBreakdownChart breakdown={result.riskBreakdown} totalScore={rec.riskScore} />
+          )}
 
           {/* Waterfall Enforcement Tier + Latency */}
           {result.waterfallTier && (
@@ -390,45 +529,14 @@ export default function ScanPage() {
             </div>
           )}
 
-          <SimilarThreats threats={result.similarThreats} />
+          {/* Matched Documents — full evidence per criteria */}
+          <MatchedEvidence
+            similarThreats={result.similarThreats}
+            threatIntelMatches={result.threatIntelMatches}
+          />
 
-          {/* Threat Intel Feed Matches */}
-          {result.threatIntelMatches && result.threatIntelMatches.length > 0 && (
-            <div style={{
-              background: '#fff', borderRadius: 12, padding: 24,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-            }}>
-              <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: '#1a1c1e' }}>
-                Threat Intelligence Matches ({result.threatIntelMatches.length})
-              </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {result.threatIntelMatches.map((t, i) => (
-                  <div key={t._id || i} style={{
-                    padding: '12px 16px', borderRadius: 8,
-                    background: '#FFF8E6', border: '1px solid #FFE5A0',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    gap: 12,
-                  }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1c1e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {t.url}
-                      </div>
-                      <div style={{ fontSize: 11, color: '#5C6C75', marginTop: 2 }}>
-                        {t.feedName} · {t.threatType} · {t.description?.substring(0, 120)}{t.description?.length > 120 ? '...' : ''}
-                      </div>
-                    </div>
-                    <div style={{
-                      padding: '4px 12px', borderRadius: 20,
-                      background: '#FFEAE5', color: '#CF4A22',
-                      fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
-                    }}>
-                      {((t.score || 0) * 100).toFixed(1)}% match
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Threat Relationship Graph */}
+          <ThreatGraph url={result.urlRecord?.url} />
         </>
       )}
     </div>

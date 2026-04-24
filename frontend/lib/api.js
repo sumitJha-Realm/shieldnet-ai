@@ -29,4 +29,13 @@ export const getSearchInfo = () => api.get('/debug/search/info');
 export const testAtlasIndex = () => api.post('/debug/search/atlas/test-index');
 export const testVectorIndex = () => api.post('/debug/search/vector/test-index');
 
+// Scan Rules
+export const getScanRules = () => api.get('/rules');
+export const updateScanRules = (patch) => api.patch('/rules', patch);
+export const resetScanRules = () => api.post('/rules/reset');
+
+// Graph
+export const getUrlGraph = (url, maxDepth = 2, minStrength = 0.3) =>
+  api.get('/graph/url', { params: { url, max_depth: maxDepth, min_strength: minStrength } });
+
 export default api;

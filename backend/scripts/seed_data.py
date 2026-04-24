@@ -78,10 +78,15 @@ def random_date(start_days_ago: int = 90, end_days_ago: int = 0) -> datetime:
     return datetime.utcnow() - timedelta(days=delta, hours=random.randint(0, 23), minutes=random.randint(0, 59))
 
 
-def build_summary(domain: str, hf: dict, us: dict, dns: str, threat: str) -> str:
+def build_summary(url: str, domain: str, hf: dict, us: dict, dns: str, threat: str,
+                   risk: float = 0.0, status: str = "", scan_count: int = 0,
+                   payload_types: list | None = None, query_params: dict | None = None) -> str:
     parts = [
         f"URL analysis for {domain}",
         f"threat classification {threat}",
+        f"risk score {risk:.1f}",
+        f"status {status}",
+        f"scan count {scan_count}",
         f"domain age {hf['domainAgeDays']} days",
         f"{'valid' if hf['sslValid'] else 'no valid'} SSL",
         f"{'shared' if hf['isSharedHosting'] else 'dedicated'} hosting",
@@ -99,6 +104,11 @@ def build_summary(domain: str, hf: dict, us: dict, dns: str, threat: str) -> str
     if us["subdomainCount"] > 1:
         parts.append(f"{us['subdomainCount']} subdomains")
     parts.append(f"DNS {dns}")
+    if payload_types:
+        parts.append(f"payload types: {', '.join(payload_types)}")
+    if query_params:
+        parts.append(f"query parameters: {', '.join(query_params.keys())}")
+    parts.append(f"full URL {url}")
     return ", ".join(parts)
 
 
@@ -142,7 +152,8 @@ def generate_url_record(is_malicious: bool) -> dict:
         "containsEncodedChars": random.random() > 0.6 if is_malicious else False,
         "subdomainCount": random.randint(0, 3),
     }
-    summary = build_summary(domain, hf, us, dns, threat)
+    scan_count = random.randint(1, 12)
+    summary = build_summary(url, domain, hf, us, dns, threat, risk=risk, status=status, scan_count=scan_count)
     created = random_date()
 
     return {
@@ -159,40 +170,115 @@ def generate_url_record(is_malicious: bool) -> dict:
         "reviewedBy": random.choice(["system_ai", "analyst_sharma", "analyst_gupta", "analyst_patel"]),
         "summaryText": summary,
         "embedding": None,  # Will be filled by Voyage AI
+        # ── New metadata fields ──────────────────────────────────────
+        "queryParams": {},
+        "payloadTypes": [],
+        "redirectChain": None,
+        "tlsCertificate": None,
+        "whoisData": None,
+        "scanCount": scan_count,
+        "firstSeenAt": created - timedelta(days=random.randint(0, 30)),
+        "lastSeenAt": created,
+        "relatedDomains": [],
         "createdAt": created,
         "updatedAt": created,
     }
 
 
 def generate_threat_log(url_id, url_record: dict) -> dict:
+    action = random.choice(["blocked", "allowed", "flagged"])
     return {
         "urlId": url_id,
         "timestamp": random_date(60),
-        "action": random.choice(["blocked", "allowed", "flagged"]),
+        "action": action,
         "userDepartment": random.choice(DEPARTMENTS),
         "userType": "gov_employee",
         "deviceType": random.choice(DEVICES),
         "ipRegion": random.choice(REGIONS),
         "aiConfidence": round(random.uniform(0.6, 0.99), 2),
+        # ── New metadata fields ──────────────────────────────────────
+        "riskScore": url_record.get("riskScore", 0.0),
+        "threatClassification": url_record.get("threatClassification", ""),
+        "triggerReasons": random.sample(
+            ["dga", "homoglyph", "brand_impersonation", "phishing_keywords",
+             "bypass", "vector_match", "threat_intel", "suspicious_tld",
+             "no_ssl", "high_entropy", "young_domain"],
+            k=random.randint(1, 4),
+        ) if action == "blocked" else [],
+        "scanTier": random.choice(["L1_CACHE", "L2_DATABASE", "L3_FULL_PIPELINE"]),
+        "responseTimeMs": round(random.uniform(0.5, 450.0), 2),
     }
 
 
 def generate_intel_feed() -> dict:
+    from utils.url_feature_extractor import build_threat_intel_text
+    from urllib.parse import urlparse
     domain = random.choice(MALICIOUS_DOMAINS)
-    return {
-        "feedName": random.choice(FEED_NAMES),
-        "url": f"http://{domain}{random.choice(PATHS)}",
-        "reportedDate": random_date(180),
-        "threatType": random.choice(["phishing", "malware", "c2"]),
-        "description": random.choice([
-            f"Known phishing campaign targeting government login portals via {domain}",
-            f"Malware distribution site hosting trojan payloads at {domain}",
-            f"Command and control server communicating with infected government endpoints from {domain}",
-            f"Credential harvesting page impersonating NIC services at {domain}",
-            f"Suspicious domain {domain} flagged by multiple threat intelligence sources",
-        ]),
+    reported_date = random_date(180)
+    threat_type = random.choice(["phishing", "malware", "c2"])
+    url = f"http://{domain}{random.choice(PATHS)}"
+    feed_name = random.choice(FEED_NAMES)
+    attack_category = random.choice(["phishing_kit", "trojan_dropper", "c2_beacon", "credential_harvest"])
+    severity = random.choice(["critical", "high", "medium"])
+    confidence = round(random.uniform(0.7, 0.99), 2)
+    last_verified = random_date(start_days_ago=30, end_days_ago=0)
+    description = random.choice([
+        f"Known phishing campaign targeting government login portals via {domain}",
+        f"Malware distribution site hosting trojan payloads at {domain}",
+        f"Command and control server communicating with infected government endpoints from {domain}",
+        f"Credential harvesting page impersonating NIC services at {domain}",
+        f"Suspicious domain {domain} flagged by multiple threat intelligence sources",
+    ])
+    entry = {
+        # Core fields (shared with scan docs)
+        "url": url,
+        "domain": domain,
+        "docType": "threat_intel",
+        "source": f"threat_feed:{feed_name}",
+        "submissionDate": reported_date,
+        "dnsStatus": "active",
+        "hostingFlags": {
+            "isSharedHosting": False,
+            "isCloudHosted": True,
+            "hostingProvider": "unknown",
+            "geoLocation": "unknown",
+            "sslValid": url.startswith("https"),
+            "domainAgeDays": 365,
+        },
+        "urlStructure": {
+            "pathDepth": url.count("/") - 2,
+            "hasIpAddress": False,
+            "hasSuspiciousTld": False,
+            "entropyScore": 0.0,
+            "containsEncodedChars": "%" in url,
+            "subdomainCount": 0,
+        },
+        "threatClassification": threat_type,
+        "riskScore": 90.0,
+        "status": "blocked",
+        "reviewedBy": f"threat_feed:{feed_name}",
+        "summaryText": "",
         "embedding": None,
+        "payloadTypes": [attack_category],
+        "scanCount": 0,
+        "firstSeenAt": reported_date,
+        "lastSeenAt": last_verified,
+        "createdAt": reported_date,
+        "updatedAt": datetime.utcnow(),
+        # Threat-intel-specific metadata
+        "feedName": feed_name,
+        "description": description,
+        "attackCategory": attack_category,
+        "targetDomain": "",
+        "payloadSignature": attack_category,
+        "severity": severity,
+        "confidence": confidence,
+        "lastVerifiedAt": last_verified,
+        "iocType": "url",
+        "ttl": random.choice([30, 60, 90, 120, 180]),
     }
+    entry["summaryText"] = build_threat_intel_text(entry)
+    return entry
 
 
 async def seed():
@@ -201,7 +287,7 @@ async def seed():
     db = client[DB_NAME]
 
     # Drop existing collections
-    for coll_name in ["urls", "threat_logs", "threat_intel_feeds"]:
+    for coll_name in ["urls", "threat_logs"]:
         await db.drop_collection(coll_name)
         logger.info("Dropped collection: %s", coll_name)
 
@@ -261,6 +347,10 @@ async def seed():
     else:
         logger.warning("VOYAGE_AI_API_KEY not set — inserting records WITHOUT embeddings.")
 
+    # Add docType to url_records
+    for rec in url_records:
+        rec["docType"] = "scan"
+
     # Insert URL records
     result = await db["urls"].insert_many(url_records)
     inserted_ids = result.inserted_ids
@@ -283,7 +373,8 @@ async def seed():
         logger.info("Generating embeddings for intel feeds...")
         import httpx
 
-        descriptions = [f["description"] for f in intel_feeds]
+        from utils.url_feature_extractor import build_threat_intel_text
+        embed_texts = [f["summaryText"] for f in intel_feeds]
         try:
             async with httpx.AsyncClient() as http_client:
                 resp = await http_client.post(
@@ -292,7 +383,7 @@ async def seed():
                         "Authorization": f"Bearer {voyage_key}",
                         "Content-Type": "application/json",
                     },
-                    json={"input": descriptions, "model": os.getenv("VOYAGE_MODEL", "voyage-4")},
+                    json={"input": embed_texts, "model": os.getenv("VOYAGE_MODEL", "voyage-4")},
                     timeout=120.0,
                 )
                 resp.raise_for_status()
@@ -302,8 +393,8 @@ async def seed():
         except Exception as e:
             logger.warning("Intel feed embedding failed (%s). Inserting WITHOUT embeddings.", e)
 
-    await db["threat_intel_feeds"].insert_many(intel_feeds)
-    logger.info("Inserted %d threat intel feeds", len(intel_feeds))
+    await db["urls"].insert_many(intel_feeds)
+    logger.info("Inserted %d threat intel entries into urls collection", len(intel_feeds))
 
     # Create indexes
     await db["urls"].create_index("url")
@@ -312,8 +403,18 @@ async def seed():
     await db["urls"].create_index("status")
     await db["urls"].create_index("createdAt")
     await db["urls"].create_index("riskScore")
+    await db["urls"].create_index("payloadTypes")
+    await db["urls"].create_index("lastSeenAt")
+    await db["urls"].create_index("scanCount")
     await db["threat_logs"].create_index("urlId")
     await db["threat_logs"].create_index("timestamp")
+    await db["threat_logs"].create_index("scanTier")
+    await db["threat_logs"].create_index("threatClassification")
+    await db["urls"].create_index("docType")
+    await db["urls"].create_index("attackCategory")
+    await db["urls"].create_index("targetDomain")
+    await db["urls"].create_index("severity")
+    await db["urls"].create_index("lastVerifiedAt")
     logger.info("MongoDB indexes created")
 
     # Create Atlas Search indexes using PyMongo's native API
@@ -337,6 +438,8 @@ async def seed():
                             "status": {"type": "stringFacet"},
                             "dnsStatus": {"type": "stringFacet"},
                             "riskScore": {"type": "number"},
+                            "payloadTypes": {"type": "string"},
+                            "scanCount": {"type": "number"},
                         },
                     },
                 },
@@ -371,6 +474,10 @@ async def seed():
                             "type": "filter",
                             "path": "status",
                         },
+                        {
+                            "type": "filter",
+                            "path": "docType",
+                        },
                     ],
                 },
                 name=vector_search_index,
@@ -383,6 +490,8 @@ async def seed():
             logger.info("Vector Search index '%s' already exists", vector_search_index)
         else:
             logger.warning("Could not create Vector Search index: %s", e)
+
+    # (threat_intel_feeds indexes no longer needed — unified into urls collection)
 
     logger.info("Seeding complete!")
     client.close()
