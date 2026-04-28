@@ -15,11 +15,12 @@ from routes.core.threat_management import router as threat_mgmt_router
 from routes.core.enricher import router as enricher_router
 from routes.core.scan_rules import router as scan_rules_router
 from routes.core.url_graph import router as url_graph_router
+from routes.core.campaigns import router as campaigns_router
 from routes.search.atlas_search import router as atlas_search_router
 from routes.search.vector_search import router as vector_search_router
 from routes.search.unified_search import router as unified_search_router
 from routes.debug.search_debug import router as debug_router
-from services.dependencies import close_mongo_client, get_database, get_url_graph_service
+from services.dependencies import close_mongo_client, get_database, get_url_graph_service, get_campaign_repository
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,6 +37,8 @@ async def lifespan(app: FastAPI):
     logger.info("Connected to database: %s", db.name)
     await get_url_graph_service().ensure_indexes()
     logger.info("Graph indexes ensured")
+    await get_campaign_repository().ensure_indexes()
+    logger.info("Campaign indexes ensured")
     yield
     # Shutdown
     await close_mongo_client()
@@ -65,6 +68,7 @@ app.include_router(threat_mgmt_router, prefix="/api/v1")
 app.include_router(enricher_router, prefix="/api/v1")
 app.include_router(scan_rules_router, prefix="/api/v1")
 app.include_router(url_graph_router, prefix="/api/v1")
+app.include_router(campaigns_router, prefix="/api/v1")
 app.include_router(atlas_search_router, prefix="/api/v1/search")
 app.include_router(vector_search_router, prefix="/api/v1/search")
 app.include_router(unified_search_router, prefix="/api/v1/search")

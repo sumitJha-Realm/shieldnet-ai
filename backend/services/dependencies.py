@@ -11,7 +11,9 @@ from repositories.impl.atlas_search_repository import AtlasSearchRepository
 from repositories.impl.vector_search_repository import VectorSearchRepository
 from repositories.impl.scan_rules_repository import ScanRulesRepository
 from repositories.impl.url_graph_repository import URLGraphRepository
+from repositories.impl.campaign_repository import CampaignRepository
 from services.agentic_analysis_service import AgenticAnalysisService
+from services.campaign_detection_service import CampaignDetectionService
 from services.url_analysis_service import URLAnalysisService
 from services.url_graph_service import URLGraphService
 from services.search.atlas_search_service import AtlasSearchService
@@ -92,7 +94,27 @@ def get_scan_rules_repository() -> ScanRulesRepository:
     return _scan_rules_repo
 
 
+_campaign_repo: CampaignRepository | None = None
+
+
+def get_campaign_repository() -> CampaignRepository:
+    global _campaign_repo
+    if _campaign_repo is None:
+        _campaign_repo = CampaignRepository(get_database())
+    return _campaign_repo
+
+
 # --- Service singletons ---
+
+_campaign_detection_svc: CampaignDetectionService | None = None
+
+
+def get_campaign_detection_service() -> CampaignDetectionService:
+    global _campaign_detection_svc
+    if _campaign_detection_svc is None:
+        _campaign_detection_svc = CampaignDetectionService(get_campaign_repository())
+    return _campaign_detection_svc
+
 
 _atlas_search_svc: AtlasSearchService | None = None
 _vector_search_svc: VectorSearchService | None = None
@@ -138,11 +160,13 @@ def get_url_analysis_service() -> URLAnalysisService:
     global _url_analysis_svc
     if _url_analysis_svc is None:
         _url_analysis_svc = URLAnalysisService(
-            get_url_repository(),
-            get_vector_search_service(),
-            get_waterfall_cache(),
+            url_repo=get_url_repository(),
+            vector_search_service=get_vector_search_service(),
+            atlas_search_service=get_atlas_search_service(),
+            cache=get_waterfall_cache(),
             rules_repo=get_scan_rules_repository(),
             graph_service=get_url_graph_service(),
+            campaign_service=get_campaign_detection_service(),
         )
     return _url_analysis_svc
 

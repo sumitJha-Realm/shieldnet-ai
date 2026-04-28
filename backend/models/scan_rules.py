@@ -69,4 +69,20 @@ DEFAULT_SCAN_RULES: dict = {
         ".xyz", ".tk", ".ml", ".ga", ".cf", ".gq", ".top", ".buzz",
         ".club", ".work", ".icu", ".cam", ".monster", ".rest", ".fit",
     ],
+
+    # ── Watched domains (monitored for impersonation / abuse) ────────
+    # URLs whose baseDomain matches one of these are highlighted in the
+    # Threat Database and can be used to pre-filter the URL shortlist.
+    "watchedDomains": [
+        "incometax.gov.in",
+        "gst.gov.in",
+        "pmkisan.gov.in",
+        "sbi.co.in",
+        "icici.com",
+        "hdfc.com",
+        "aadhaar.gov.in",
+        "passport.gov.in",
+        "certifiedsoftware.in",
+        "generic-malware-c2.ru",
+    ],
 }

@@ -1,0 +1,682 @@
+URL SCANNING SCENARIOS - EXAMPLE URLS & EXPLANATIONS
+================================================================
+
+1. BENIGN URLs (Status: Allowed, Risk: Low)
+================================================================
+
+Safe, legitimate websites with no threat indicators.
+
+URL: google.com
+Why It's Benign: Legitimate search engine, trusted brand
+Risk Score: 0-5
+Status: Allowed
+
+URL: github.com
+Why It's Benign: Legitimate code repository platform
+Risk Score: 0-5
+Status: Allowed
+
+URL: stackoverflow.com
+Why It's Benign: Legitimate developer Q&A platform
+Risk Score: 0-5
+Status: Allowed
+
+URL: microsoft.com
+Why It's Benign: Legitimate enterprise software company
+Risk Score: 0-5
+Status: Allowed
+
+URL: wikipedia.org
+Why It's Benign: Legitimate encyclopedia, trusted content
+Risk Score: 0-5
+Status: Allowed
+
+URL: www.amazon.com
+Why It's Benign: Legitimate e-commerce platform
+Risk Score: 0-5
+Status: Allowed
+
+URL: apple.com
+Why It's Benign: Legitimate technology company
+Risk Score: 0-5
+Status: Allowed
+
+What Scanner Detects:
+- Valid SSL certificate
+- Established domain age
+- No malware signatures
+- No phishing patterns
+- No DGA characteristics
+- Legitimate Alexa ranking
+
+
+2. PHISHING URLs - HOMOGLYPH/TYPOSQUATTING (Status: Blocked, Risk: High)
+================================================================
+
+Attempts to steal credentials by impersonating legitimate services using look-alike characters.
+
+URL: g00gle.com
+Trick Used: Zero (0) replaces O
+Why It's Phishing: Looks like Google to human eyes
+Risk Score: 72-85
+Status: Blocked
+Explanation: Character substitution makes it appear as the legitimate Google domain
+
+URL: am4zon.com
+Trick Used: 4 replaces A
+Why It's Phishing: Looks like Amazon
+Risk Score: 70-82
+Status: Blocked
+Explanation: Number substitution mimics Amazon branding
+
+URL: appl3.com
+Trick Used: 3 replaces E
+Why It's Phishing: Looks like Apple
+Risk Score: 68-80
+Status: Blocked
+Explanation: Visual similarity attack targeting Apple brand
+
+URL: 1bm.com
+Trick Used: l (lowercase L) replaces I, 1 (one) at start
+Why It's Phishing: Looks like IBM
+Risk Score: 65-78
+Status: Blocked
+Explanation: Multiple character substitutions create brand confusion
+
+URL: vv1ndows.com
+Trick Used: v + lowercase L replace w
+Why It's Phishing: Looks like Windows
+Risk Score: 70-83
+Status: Blocked
+Explanation: Mixed character and number substitution
+
+What Scanner Detects:
+- Confusable character substitution (homoglyphs)
+- Resembles legitimate brand
+- Phishing keywords in domain
+- Brand impersonation patterns
+
+
+3. PHISHING URLs - FAKE SECURITY/ACCOUNT ALERT (Status: Blocked, Risk: High)
+================================================================
+
+Social engineering through fake security alerts and account verification requests.
+
+URL: secure-paypal-confirm.com
+Social Engineering Tactic: Fake security confirmation page
+Risk Score: 75-88
+Status: Blocked
+Keywords: "secure", "paypal", "confirm"
+
+URL: apple-id-verify.net
+Social Engineering Tactic: Fake Apple ID verification
+Risk Score: 74-87
+Status: Blocked
+Keywords: "apple", "id", "verify"
+
+URL: amazon-account-update.info
+Social Engineering Tactic: Fake account update notice
+Risk Score: 73-86
+Status: Blocked
+Keywords: "amazon", "account", "update"
+
+URL: microsoft-security-alert.xyz
+Social Engineering Tactic: Fake Windows security alert
+Risk Score: 76-89
+Status: Blocked
+Keywords: "microsoft", "security", "alert"
+
+URL: fb-login-verify.tk
+Social Engineering Tactic: Fake Facebook login verification
+Risk Score: 72-85
+Status: Blocked
+Keywords: "facebook", "login", "verify"
+
+What Scanner Detects:
+- Phishing keywords: "verify", "confirm", "security", "alert", "update"
+- Brand name + legitimate service combination
+- Suspicious TLDs (.info, .xyz, .tk)
+- Non-standard domain construction
+
+
+4. PHISHING URLs - LOOKALIKE/MISSPELLING (Status: Blocked, Risk: High)
+================================================================
+
+Domains with typos or subtle character differences from legitimate brands.
+
+URL: goog1e.com
+Misspelling Type: Letter/number confusion (1 instead of l)
+Looks Like: Google
+Risk Score: 68-80
+Status: Blocked
+
+URL: paipal.com
+Misspelling Type: Missing letter
+Looks Like: PayPal
+Risk Score: 70-83
+Status: Blocked
+
+URL: linkedln.com
+Misspelling Type: Character substitution (i→l)
+Looks Like: LinkedIn
+Risk Score: 69-81
+Status: Blocked
+
+URL: gitbub.com
+Misspelling Type: Typo (h→u)
+Looks Like: GitHub
+Risk Score: 65-78
+Status: Blocked
+
+URL: twiter.com
+Misspelling Type: Missing letter
+Looks Like: Twitter
+Risk Score: 64-77
+Status: Blocked
+
+What Scanner Detects:
+- Levenshtein distance < 3 from legitimate domain
+- Brand reputation mismatch
+- Structural similarity to known brands
+
+
+5. MALWARE URLs (Status: Blocked, Risk: Critical)
+================================================================
+
+Distribute malicious software (trojans, ransomware, spyware, bots, worms).
+
+URL: malware-distribution-site.net
+Malware Type: Trojan/Worm hosting
+Infection Vector: Executable download
+Risk Score: 85-95
+Status: Blocked
+Keywords: malware, distribution
+
+URL: ransomware-c2-server.xyz
+Malware Type: Ransomware C2 communication
+Infection Vector: File encryption malware
+Risk Score: 92-98
+Status: Blocked
+Keywords: ransomware, c2, server
+
+URL: exploit-kit-payload.tk
+Malware Type: Exploit kit hosting
+Infection Vector: Browser vulnerability
+Risk Score: 88-96
+Status: Blocked
+Keywords: exploit, kit, payload
+
+URL: botnet-command-center.ru
+Malware Type: Botnet command server
+Infection Vector: Bot malware
+Risk Score: 90-97
+Status: Blocked
+Keywords: botnet, command, center
+
+URL: suspicious-executable-download.info
+Malware Type: Malware dropper
+Infection Vector: Software trojan
+Risk Score: 84-94
+Status: Blocked
+Keywords: suspicious, executable, download
+
+URL: worm-distribution.net
+Malware Type: Worm hosting
+Infection Vector: Network worm
+Risk Score: 86-95
+Status: Blocked
+Keywords: worm, distribution
+
+URL: spyware-installer.xyz
+Malware Type: Spyware hosting
+Infection Vector: Information stealer
+Risk Score: 83-93
+Status: Blocked
+Keywords: spyware, installer
+
+URL: adware-pusher.tk
+Malware Type: Adware/PUP hosting
+Infection Vector: Unwanted software
+Risk Score: 78-88
+Status: Blocked
+Keywords: adware, pusher
+
+What Scanner Detects:
+- Malware keywords: "malware", "trojan", "ransomware", "exploit", "botnet", "worm", "spyware", "adware"
+- Reputation data from threat feeds
+- Known malware hosting patterns
+- Suspicious hosting infrastructure (.ru, .tk, .xyz)
+- File download patterns
+
+
+6. C2 (COMMAND & CONTROL) URLS (Status: Blocked, Risk: Critical)
+================================================================
+
+Infrastructure used by attackers to control infected machines and botnets.
+
+URL: c2-botnet-panel.tk
+C2 Type: Botnet C2 panel
+Botnet/APT: Generic botnet
+Risk Score: 89-97
+Status: Blocked
+
+URL: command-control-server.ru
+C2 Type: C2 communication server
+Botnet/APT: APT infrastructure
+Risk Score: 91-98
+Status: Blocked
+
+URL: botnet-c2-communication.xyz
+C2 Type: Botnet command channel
+Botnet/APT: Bot network
+Risk Score: 90-97
+Status: Blocked
+
+URL: underground-c2-panel.net
+C2 Type: Underground marketplace C2
+Botnet/APT: Cybercriminal panel
+Risk Score: 93-99
+Status: Blocked
+
+URL: remote-access-trojan-c2.info
+C2 Type: RAT C2 server
+Botnet/APT: RAT malware
+Risk Score: 92-98
+Status: Blocked
+
+URL: apt-command-center.ru
+C2 Type: APT infrastructure
+Botnet/APT: Advanced persistent threat
+Risk Score: 94-99
+Status: Blocked
+
+URL: ransomware-negotiation-site.net
+C2 Type: Ransomware negotiation/payment
+Botnet/APT: Ransomware gang
+Risk Score: 90-97
+Status: Blocked
+
+URL: dga-sink-domain.tk
+C2 Type: DGA sinkhole
+Botnet/APT: Botnet DGA
+Risk Score: 87-95
+Status: Blocked
+
+What Scanner Detects:
+- C2 keywords: "c2", "command", "control", "botnet", "panel", "server"
+- APT/malware framework indicators
+- Registered by known threat actors
+- Hosting infrastructure in high-risk countries
+- Network behavior patterns
+
+
+7. DGA (DOMAIN GENERATION ALGORITHM) DOMAINS (Status: Blocked, Risk: High)
+================================================================
+
+Malware-generated domains using algorithmic patterns to evade detection.
+
+URL: xkfrzmkbpq.tk
+DGA Pattern: Random consonant clusters
+Why It's DGA: High entropy, no vowels
+Risk Score: 75-88
+Status: Blocked
+
+URL: ndkqmxbzpg.net
+DGA Pattern: Vowel-light, random pattern
+Why It's DGA: Algorithmic generation
+Risk Score: 73-86
+Status: Blocked
+
+URL: qpxdvmkrst.xyz
+DGA Pattern: All consonants, high entropy
+Why It's DGA: DGA characteristic
+Risk Score: 76-89
+Status: Blocked
+
+URL: bfjmkxqwpn.info
+DGA Pattern: Unusual letter combinations
+Why It's DGA: Algorithm-generated
+Risk Score: 74-87
+Status: Blocked
+
+What Scanner Detects:
+- Entropy analysis (high randomness)
+- Unusual character distribution (too many consonants, no vowels)
+- Unpronounceable domain patterns
+- Known DGA signatures
+- Structural anomalies (length, character distribution)
+
+
+8. SUSPICIOUS URLS (Status: Flagged, Risk: Medium-High)
+================================================================
+
+Questionable or potentially malicious, but insufficient evidence for definitive classification.
+
+URL: slightly-suspicious-domain.tk
+Suspicion Reason: Suspicious TLD + vague naming
+Risk Score: 58-70
+Status: Flagged
+
+URL: looks-like-phishing.net
+Suspicion Reason: Phishing keywords, not definitively phishing
+Risk Score: 62-74
+Status: Flagged
+
+URL: potential-scam-site.xyz
+Suspicion Reason: Scam keywords + risky TLD
+Risk Score: 65-77
+Status: Flagged
+
+URL: questionable-business.info
+Suspicion Reason: Questionable purpose + suspicious TLD
+Risk Score: 60-72
+Status: Flagged
+
+URL: unclear-legitimacy.tk
+Suspicion Reason: Unclear purpose, risky hosting
+Risk Score: 59-71
+Status: Flagged
+
+URL: possibly-malicious.net
+Suspicion Reason: Malware-adjacent keywords
+Risk Score: 64-76
+Status: Flagged
+
+URL: risky-download-site.xyz
+Suspicion Reason: Download + suspicious pattern
+Risk Score: 66-78
+Status: Flagged
+
+What Scanner Detects:
+- Suspicious TLDs (.tk, .xyz, .info)
+- Vague or concerning naming patterns
+- Weak SSL certificates
+- Recent domain registration (< 30 days)
+- No clear business purpose
+
+
+9. CANONICALIZATION SCENARIOS (Domain Variants)
+================================================================
+
+How the scanner handles apex domain vs www variant alignment.
+
+URL: google.com
+Canonical: google.com
+Expected Status: Allowed
+Actual Status: Allowed
+Reason: Legitimate brand
+
+URL: www.google.com
+Canonical: google.com
+Expected Status: Allowed
+Actual Status: Allowed
+Reason: Canonical-aligned - inherits status from apex
+
+URL: blocked-domain.net
+Canonical: blocked-domain.net
+Expected Status: Blocked
+Actual Status: Blocked
+Reason: Malicious
+
+URL: www.blocked-domain.net
+Canonical: blocked-domain.net
+Expected Status: Blocked
+Actual Status: Blocked
+Reason: Canonical-aligned - inherits status from apex
+
+What Scanner Detects:
+- Domain canonicalization (www prefix normalization)
+- Status inheritance from canonical authority (apex domain)
+- Risk score alignment across variants
+- Single threat classification for domain family
+
+
+10. CAMPAIGN-COORDINATED URLS (Multi-Domain Attack)
+================================================================
+
+Related URLs that are part of the same phishing or malware campaign.
+
+URL: paypal-verify-account.tk
+Campaign: campaign_001_paypal_2025
+Campaign Name: PayPal Phishing Campaign
+Risk Score: 82-89
+Status: Blocked
+
+URL: paypal-update-billing.xyz
+Campaign: campaign_001_paypal_2025
+Campaign Name: PayPal Phishing Campaign
+Risk Score: 81-88
+Status: Blocked
+
+URL: paypal-security-alert.net
+Campaign: campaign_001_paypal_2025
+Campaign Name: PayPal Phishing Campaign
+Risk Score: 83-90
+Status: Blocked
+
+URL: amazon-account-verify.tk
+Campaign: campaign_002_amazon_2025
+Campaign Name: Amazon Phishing Campaign
+Risk Score: 80-87
+Status: Blocked
+
+URL: amazon-order-confirm.xyz
+Campaign: campaign_002_amazon_2025
+Campaign Name: Amazon Phishing Campaign
+Risk Score: 79-86
+Status: Blocked
+
+What Scanner Detects:
+- Shared characteristics (phishing keywords, similar structure)
+- Same registration infrastructure (registrar, IP)
+- Temporal clustering (registered around same time)
+- Campaign linkage via embedding similarity
+- Coordinated threat actors
+
+
+11. RISK SCORE RANGES
+================================================================
+
+Risk Score: 0-20
+Status: ALLOWED
+Color: GREEN
+Example URLs: google.com, github.com, wikipedia.org
+
+Risk Score: 21-40
+Status: LOW RISK
+Color: YELLOW
+Example URLs: Newer businesses, low-confidence threats
+
+Risk Score: 41-60
+Status: MEDIUM RISK
+Color: ORANGE
+Example URLs: slightly-suspicious-domain.tk
+
+Risk Score: 61-75
+Status: HIGH RISK
+Color: RED
+Example URLs: looks-like-phishing.net, potential-scam.xyz
+
+Risk Score: 76-100
+Status: CRITICAL / BLOCKED
+Color: BLOCKED
+Example URLs: g00gle.com, malware-distribution.net, c2-server.ru
+
+
+12. STATUS INDICATORS
+================================================================
+
+Status: ALLOWED
+Meaning: Safe, no threats detected
+Action: Visit freely
+Example: google.com
+
+Status: FLAGGED
+Meaning: Suspicious, requires caution
+Action: Investigate further
+Example: slightly-suspicious-domain.tk
+
+Status: BLOCKED
+Meaning: Malicious, dangerous
+Action: Prevent access
+Example: g00gle.com, malware-site.net
+
+
+13. DEMO WALKTHROUGH - COPY THESE CURL COMMANDS
+================================================================
+
+STEP 1: Show Benign URL
+
+curl -X POST http://localhost:8000/api/v1/scan \
+  -H "Content-Type: application/json" \
+  -d '{"url": "google.com"}'
+
+Expected Result: Status "allowed", Risk 2-5, No threats
+
+
+STEP 2: Show Phishing URL (Homoglyph)
+
+curl -X POST http://localhost:8000/api/v1/scan \
+  -H "Content-Type: application/json" \
+  -d '{"url": "g00gle.com"}'
+
+Expected Result: Status "blocked", Risk 78-85, "Homoglyph impersonation detected"
+
+
+STEP 3: Show Malware URL
+
+curl -X POST http://localhost:8000/api/v1/scan \
+  -H "Content-Type: application/json" \
+  -d '{"url": "malware-distribution-site.net"}'
+
+Expected Result: Status "blocked", Risk 85-95, "Malware keywords detected"
+
+
+STEP 4: Show DGA Domain
+
+curl -X POST http://localhost:8000/api/v1/scan \
+  -H "Content-Type: application/json" \
+  -d '{"url": "xkfrzmkbpq.tk"}'
+
+Expected Result: Status "blocked", Risk 75-88, "DGA characteristics detected"
+
+
+STEP 5: Show Canonical Alignment
+
+curl -X POST http://localhost:8000/api/v1/scan \
+  -H "Content-Type: application/json" \
+  -d '{"url": "www.google.com"}'
+
+Expected Result: Same as google.com, Status "allowed", Risk 2-5, "Canonical-domain aligned"
+
+
+STEP 6: Show Campaign-Related URLs
+
+curl -X POST http://localhost:8000/api/v1/scan \
+  -H "Content-Type: application/json" \
+  -d '{"url": "paypal-verify-account.tk"}'
+
+curl -X POST http://localhost:8000/api/v1/scan \
+  -H "Content-Type: application/json" \
+  -d '{"url": "paypal-update-billing.xyz"}'
+
+Expected Result: Same campaign ID, related URLs listed
+
+
+14. DEMO NARRATIVES - EXPLAIN EACH SCENARIO
+================================================================
+
+SCENARIO A: User navigates to a typosquatted site
+
+Story: "I clicked on what I thought was google.com but it was spelled slightly differently"
+
+Demo Steps:
+1. Scan g00gle.com → Risk 75, Status Blocked, "Typosquatting detected"
+2. Explain: "The scanner caught the misspelling (i instead of L) and blocked it before you could enter credentials"
+3. Compare: Scan google.com → Risk 2, Status Allowed, "This is legitimate"
+
+Key Message: "The scanner prevents credential theft before it happens"
+
+
+SCENARIO B: Ransomware delivery prevention
+
+Story: "I received an email with a download link that seemed suspicious"
+
+Demo Steps:
+1. Scan malware-distribution-site.net → Risk 92, Status Blocked, "Malware keywords detected"
+2. Explain: "The domain name itself contains 'malware' which is flagged. The scanner also checks threat reputation databases"
+3. Show Risk Breakdown: "Malware keywords (35%), Suspicious hosting (40%), Reputation score (-95)"
+
+Key Message: "The scanner detects malware-hosting domains at multiple levels"
+
+
+SCENARIO C: Botnet C2 communication prevention
+
+Story: "How does the scanner detect command-and-control infrastructure?"
+
+Demo Steps:
+1. Scan c2-botnet-panel.tk → Risk 94, Status Blocked, "C2 infrastructure detected"
+2. Explain: "The scanner recognizes 'C2', 'botnet', 'panel' keywords and identifies high-risk TLD (.tk)"
+3. Show Impact: "This blocks your machine from being controlled by attackers even if malware gets installed"
+
+Key Message: "The scanner prevents bot command-and-control communication"
+
+
+SCENARIO D: Phishing campaign tracking
+
+Story: "How does the scanner handle coordinated attacks?"
+
+Demo Steps:
+1. Scan paypal-verify-account.tk → Campaign campaign_001_paypal_2025, Related 2 URLs
+2. Scan paypal-update-billing.xyz → Same campaign detected
+3. Explain: "The scanner clusters related domains into campaigns. Helps identify coordinated threat actors"
+
+Key Message: "The scanner identifies organized phishing campaigns and blocks all related URLs"
+
+
+15. QUICK REFERENCE TABLE - BEST URLS FOR EACH FEATURE
+================================================================
+
+Feature: Benign Detection
+Best URL: google.com
+What It Shows: Clean scan, no threats
+
+Feature: Homoglyph Phishing
+Best URL: g00gle.com
+What It Shows: Character substitution attack
+
+Feature: Fake Alert Phishing
+Best URL: secure-paypal-confirm.com
+What It Shows: Social engineering
+
+Feature: Typosquatting
+Best URL: goog1e.com
+What It Shows: Misspelling attack
+
+Feature: Malware Hosting
+Best URL: malware-distribution-site.net
+What It Shows: Malicious software distribution
+
+Feature: C2 Infrastructure
+Best URL: c2-botnet-panel.tk
+What It Shows: Bot command center
+
+Feature: DGA Detection
+Best URL: xkfrzmkbpq.tk
+What It Shows: Algorithm-generated randomness
+
+Feature: Suspicious Domain
+Best URL: slightly-suspicious-domain.tk
+What It Shows: Medium-risk indicators
+
+Feature: Canonical Alignment
+Best URL: www.google.com
+What It Shows: Domain variant normalization
+
+Feature: Campaign Clustering
+Best URL: paypal-verify-account.tk
+What It Shows: Coordinated attack
+
+
+END OF DOCUMENT
+================================================================

@@ -9,6 +9,7 @@ import SimilarThreats from '../../components/scanner/SimilarThreats';
 import MatchedEvidence from '../../components/scanner/MatchedEvidence';
 import ThreatGraph from '../../components/scanner/ThreatGraph';
 import RiskBreakdownChart from '../../components/scanner/RiskBreakdownChart';
+import CampaignBanner from '../../components/scanner/CampaignBanner';
 import { scanAgenticURL, scanURL, updateURLStatus } from '../../lib/api';
 
 /* ── STATUS_PILL colours ─────────────────────────────────────────── */
@@ -200,7 +201,7 @@ export default function ScanPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [scanMode, setScanMode] = useState('agentic');
+  const [scanMode, setScanMode] = useState('pipeline');
 
   const handleScan = async (url) => {
     setLoading(true);
@@ -253,8 +254,8 @@ export default function ScanPage() {
         border: '1px solid #E8EDEB',
       }}>
         {[
-          { key: 'agentic', label: 'Pipeline + Foundry' },
           { key: 'pipeline', label: 'Pipeline only' },
+          { key: 'agentic', label: 'Pipeline + Foundry' },
         ].map((mode) => {
           const active = scanMode === mode.key;
           return (
@@ -447,6 +448,11 @@ export default function ScanPage() {
             <RiskBreakdownChart breakdown={result.riskBreakdown} totalScore={rec.riskScore} />
           )}
 
+          {/* Campaign Detection Banner */}
+          {result.campaign && (
+            <CampaignBanner campaign={result.campaign} />
+          )}
+
           {/* Waterfall Enforcement Tier + Latency */}
           {result.waterfallTier && (
             <div style={{
@@ -461,7 +467,7 @@ export default function ScanPage() {
                 {result.waterfallTier === 'L1_CACHE' ? '⚡ L1 Cache Hit' : result.waterfallTier === 'L2_DATABASE' ? '💾 L2 Database Hit' : '🔬 L3 Full Pipeline'}
               </span>
               <span style={{ fontSize: 12, color: '#5C6C75' }}>
-                Latency: <strong>{result.latencyMs}ms</strong>
+                Vector Search: <strong>{result.vectorSearchMs ?? '—'}ms</strong>
               </span>
               <span style={{ fontSize: 11, color: '#889397', marginLeft: 'auto' }}>
                 Waterfall: Local Cache → MongoDB → Vector DB + AI

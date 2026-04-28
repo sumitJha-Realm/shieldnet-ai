@@ -40,4 +40,11 @@ export const resetScanRules = () => api.post('/rules/reset');
 export const getUrlGraph = (url, maxDepth = 2, minStrength = 0.3) =>
   api.get('/graph/url', { params: { url, max_depth: maxDepth, min_strength: minStrength } });
 
+// Campaigns
+export const listCampaigns = (params) => api.get('/campaigns', { params });
+export const getCampaign = (id) => api.get(`/campaigns/${id}`);
+
+// Watched domains (threat database shortlist)
+export const getWatchedDomains = () => api.get('/domains/watched');
+
 export default api;

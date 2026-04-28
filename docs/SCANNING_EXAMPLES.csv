@@ -1,0 +1,55 @@
+URL,Category,Threat Type,Description,Risk Score,Status,Why It Matters
+google.com,Benign,None,Legitimate search engine,0-5,Allowed,Safe baseline for comparison
+github.com,Benign,None,Code repository platform,0-5,Allowed,Safe baseline for comparison
+stackoverflow.com,Benign,None,Developer Q&A platform,0-5,Allowed,Safe baseline for comparison
+microsoft.com,Benign,None,Enterprise software company,0-5,Allowed,Safe baseline for comparison
+wikipedia.org,Benign,None,Encyclopedia trusted content,0-5,Allowed,Safe baseline for comparison
+g00gle.com,Phishing,Homoglyph,Zero replaces O - looks like Google,72-85,Blocked,Character substitution attack
+am4zon.com,Phishing,Homoglyph,4 replaces A - looks like Amazon,70-82,Blocked,Visual similarity attack
+appl3.com,Phishing,Homoglyph,3 replaces E - looks like Apple,68-80,Blocked,Character substitution attack
+1bm.com,Phishing,Homoglyph,Multiple character substitutions - looks like IBM,65-78,Blocked,Confusable domain
+vv1ndows.com,Phishing,Homoglyph,v and lowercase L replace w - looks like Windows,70-83,Blocked,Character substitution attack
+goog1e.com,Phishing,Typo,Letter/number confusion (1 instead of l),68-80,Blocked,Misspelling attack
+paipal.com,Phishing,Typo,Missing letter - looks like PayPal,70-83,Blocked,Typosquatting attack
+linkedln.com,Phishing,Typo,Character substitution (i to l) - looks like LinkedIn,69-81,Blocked,Misspelling attack
+gitbub.com,Phishing,Typo,Typo in name - looks like GitHub,65-78,Blocked,Misspelling attack
+twiter.com,Phishing,Typo,Missing letter - looks like Twitter,64-77,Blocked,Typosquatting attack
+secure-paypal-confirm.com,Phishing,Fake Alert,Fake PayPal security confirmation,75-88,Blocked,Social engineering attack
+apple-id-verify.net,Phishing,Fake Alert,Fake Apple ID verification,74-87,Blocked,Credential theft attempt
+amazon-account-update.info,Phishing,Fake Alert,Fake Amazon account update notice,73-86,Blocked,Social engineering attack
+microsoft-security-alert.xyz,Phishing,Fake Alert,Fake Windows security alert,76-89,Blocked,Social engineering attack
+fb-login-verify.tk,Phishing,Fake Alert,Fake Facebook login verification,72-85,Blocked,Credential theft attempt
+malware-distribution-site.net,Malware,Trojan/Worm,Trojan and worm hosting,85-95,Blocked,Malware distribution
+ransomware-c2-server.xyz,Malware,Ransomware,Ransomware C2 communication server,92-98,Blocked,Ransomware command center
+exploit-kit-payload.tk,Malware,Exploit Kit,Exploit kit hosting,88-96,Blocked,Browser vulnerability exploitation
+botnet-command-center.ru,Malware,Botnet,Botnet command server,90-97,Blocked,Bot malware control
+suspicious-executable-download.info,Malware,Trojan Dropper,Malware dropper,84-94,Blocked,Malware distribution
+worm-distribution.net,Malware,Worm,Worm hosting,86-95,Blocked,Malware distribution
+spyware-installer.xyz,Malware,Spyware,Spyware hosting,83-93,Blocked,Information stealer
+adware-pusher.tk,Malware,Adware,Adware/PUP hosting,78-88,Blocked,Unwanted software
+c2-botnet-panel.tk,C2,Botnet C2,Botnet C2 panel,89-97,Blocked,Bot command center
+command-control-server.ru,C2,C2 Server,C2 communication server,91-98,Blocked,APT infrastructure
+botnet-c2-communication.xyz,C2,Botnet C2,Botnet command channel,90-97,Blocked,Bot control infrastructure
+underground-c2-panel.net,C2,Underground C2,Underground marketplace C2,93-99,Blocked,Cybercriminal panel
+remote-access-trojan-c2.info,C2,RAT C2,RAT C2 server,92-98,Blocked,Remote access trojan
+apt-command-center.ru,C2,APT C2,APT infrastructure,94-99,Blocked,Advanced persistent threat
+ransomware-negotiation-site.net,C2,Ransomware C2,Ransomware negotiation/payment site,90-97,Blocked,Ransomware gang infrastructure
+dga-sink-domain.tk,DGA,DGA Domain,Domain generation algorithm sinkhole,87-95,Blocked,Botnet DGA detection
+xkfrzmkbpq.tk,DGA,DGA Domain,Random consonants no vowels,75-88,Blocked,Algorithm-generated domain
+ndkqmxbzpg.net,DGA,DGA Domain,Algorithmic pattern vowel-light,73-86,Blocked,Algorithm-generated domain
+qpxdvmkrst.xyz,DGA,DGA Domain,All consonants high entropy,76-89,Blocked,Algorithm-generated domain
+bfjmkxqwpn.info,DGA,DGA Domain,Unusual letter combinations,74-87,Blocked,Algorithm-generated domain
+slightly-suspicious-domain.tk,Suspicious,Suspicious,Suspicious TLD and vague naming,58-70,Flagged,Requires investigation
+looks-like-phishing.net,Suspicious,Suspicious,Phishing keywords not definitive,62-74,Flagged,Requires investigation
+potential-scam-site.xyz,Suspicious,Suspicious,Scam keywords and risky TLD,65-77,Flagged,Requires investigation
+questionable-business.info,Suspicious,Suspicious,Questionable purpose suspicious TLD,60-72,Flagged,Requires investigation
+unclear-legitimacy.tk,Suspicious,Suspicious,Unclear purpose risky hosting,59-71,Flagged,Requires investigation
+possibly-malicious.net,Suspicious,Suspicious,Malware-adjacent keywords,64-76,Flagged,Requires investigation
+risky-download-site.xyz,Suspicious,Suspicious,Download suspicious pattern,66-78,Flagged,Requires investigation
+www.google.com,Canonical Variant,Canonicalization,www variant of google.com inherits apex status,0-5,Allowed,Tests domain canonicalization
+www.blocked-domain.net,Canonical Variant,Canonicalization,www variant of blocked domain inherits apex status,92,Blocked,Tests domain canonicalization
+paypal-verify-account.tk,Campaign,Phishing Campaign,Campaign 001 PayPal Phishing Campaign,82-89,Blocked,Part of coordinated attack
+paypal-update-billing.xyz,Campaign,Phishing Campaign,Campaign 001 PayPal Phishing Campaign (related),81-88,Blocked,Part of coordinated attack
+paypal-security-alert.net,Campaign,Phishing Campaign,Campaign 001 PayPal Phishing Campaign (related),83-90,Blocked,Part of coordinated attack
+amazon-account-verify.tk,Campaign,Phishing Campaign,Campaign 002 Amazon Phishing Campaign,80-87,Blocked,Part of coordinated attack
+amazon-order-confirm.xyz,Campaign,Phishing Campaign,Campaign 002 Amazon Phishing Campaign (related),79-86,Blocked,Part of coordinated attack

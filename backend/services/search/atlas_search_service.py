@@ -36,8 +36,12 @@ class AtlasSearchService:
         )
 
         if filters:
+            if "docType" in filters:
+                builder.filter(builder.equals("docType", filters["docType"]))
             if "threatClassification" in filters:
                 builder.filter(builder.equals("threatClassification", filters["threatClassification"]))
+            if "attackCategory" in filters:
+                builder.filter(builder.equals("attackCategory", filters["attackCategory"]))
             if "status" in filters:
                 builder.filter(builder.equals("status", filters["status"]))
             if "dnsStatus" in filters:

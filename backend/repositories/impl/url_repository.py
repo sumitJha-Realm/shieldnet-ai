@@ -14,6 +14,16 @@ class URLRepository(URLRepositoryInterface):
     def __init__(self, db: AsyncIOMotorDatabase, collection_name: str = "urls"):
         self._collection = db[collection_name]
 
+    def _normalize_bson(self, value):
+        """Recursively convert BSON-only types (ObjectId) to JSON-safe values."""
+        if isinstance(value, ObjectId):
+            return str(value)
+        if isinstance(value, dict):
+            return {k: self._normalize_bson(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [self._normalize_bson(v) for v in value]
+        return value
+
     async def insert_one(self, document: dict) -> str:
         result = await self._collection.insert_one(document)
         return str(result.inserted_id)
@@ -21,13 +31,43 @@ class URLRepository(URLRepositoryInterface):
     async def find_by_url(self, url: str) -> Optional[dict]:
         doc = await self._collection.find_one({"url": url})
         if doc:
-            doc["_id"] = str(doc["_id"])
+            doc = self._normalize_bson(doc)
+        return doc
+
+    async def find_latest_by_canonical_domain(self, canonical_domain: str) -> Optional[dict]:
+        """Return the most recently updated scan record for apex/www variants."""
+        canonical = (canonical_domain or "").strip().lower().rstrip(".")
+        if not canonical:
+            return None
+
+        variant_domains = [canonical]
+        if not canonical.startswith("www."):
+            variant_domains.append(f"www.{canonical}")
+
+        filter_doc = {
+            "$and": [
+                {
+                    "$or": [
+                        {"canonicalDomain": canonical},
+                        {"domain": {"$in": variant_domains}},
+                    ]
+                },
+                {"docType": {"$ne": "threat_intel"}},
+            ]
+        }
+
+        doc = await self._collection.find_one(
+            filter_doc,
+            sort=[("updatedAt", -1), ("lastSeenAt", -1), ("submissionDate", -1)],
+        )
+        if doc:
+            doc = self._normalize_bson(doc)
         return doc
 
     async def find_by_id(self, doc_id: str) -> Optional[dict]:
         doc = await self._collection.find_one({"_id": ObjectId(doc_id)})
         if doc:
-            doc["_id"] = str(doc["_id"])
+            doc = self._normalize_bson(doc)
         return doc
 
     async def find_many(
@@ -43,8 +83,7 @@ class URLRepository(URLRepositoryInterface):
         cursor = cursor.skip(skip).limit(limit)
         results = []
         async for doc in cursor:
-            doc["_id"] = str(doc["_id"])
-            results.append(doc)
+            results.append(self._normalize_bson(doc))
         return results
 
     async def update_one(self, doc_id: str, update: dict) -> bool:

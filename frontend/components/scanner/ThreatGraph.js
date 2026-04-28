@@ -32,7 +32,8 @@ export default function ThreatGraph({ url }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [hovered, setHovered] = useState(null);
-  const [maxDepth, setMaxDepth] = useState(2);
+  const [selected, setSelected] = useState(null);
+  const [maxDepth, setMaxDepth] = useState(1);
   const svgRef = useRef(null);
 
   const fetchGraph = useCallback(async () => {
@@ -223,16 +224,18 @@ export default function ThreatGraph({ url }) {
               const r = isRoot ? 24 : 16;
               const fill = isRoot ? '#016BF8' : (STATUS_COLORS[node.status] || '#5C6C75');
               const isHov = hovered === node.url;
+              const isSel = selected === node.url;
 
               return (
                 <g
                   key={node.url}
                   onMouseEnter={() => setHovered(node.url)}
                   onMouseLeave={() => setHovered(null)}
+                  onClick={() => setSelected(prev => prev === node.url ? null : node.url)}
                   style={{ cursor: 'pointer' }}
                 >
-                  {/* Glow on hover */}
-                  {isHov && <circle cx={node.x} cy={node.y} r={r + 6} fill={fill} opacity={0.15} />}
+                  {/* Glow on hover or selected */}
+                  {(isHov || isSel) && <circle cx={node.x} cy={node.y} r={r + 6} fill={fill} opacity={0.15} />}
                   <circle
                     cx={node.x} cy={node.y} r={r}
                     fill={fill} stroke="#fff" strokeWidth={2}
@@ -262,10 +265,12 @@ export default function ThreatGraph({ url }) {
             })}
           </svg>
 
-          {/* Hover detail panel */}
-          {hovered && (() => {
-            const node = positioned.find(n => n.url === hovered);
-            const nodeEdges = edgeLines.filter(e => e.from === hovered || e.to === hovered);
+          {/* Selected node detail panel + Stats wrapper */}
+          <div style={{ position: 'relative' }}>
+          {/* Detail panel — shown when a node is clicked */}
+          {selected && (() => {
+            const node = positioned.find(n => n.url === selected);
+            const nodeEdges = edgeLines.filter(e => e.from === selected || e.to === selected);
             if (!node) return null;
             return (
               <div style={{
@@ -290,7 +295,7 @@ export default function ThreatGraph({ url }) {
                     <span style={{ color: '#5C6C75' }}>Relationship factors:</span>
                     {nodeEdges.map((e, i) => (
                       <div key={i} style={{ marginLeft: 8, marginTop: 2 }}>
-                        → {e.from === hovered ? e.to : e.from}
+                        → {e.from === selected ? e.to : e.from}
                         <span style={{ color: '#00ED64', marginLeft: 6 }}>{(e.strength * 100).toFixed(0)}% strength</span>
                         {(e.factors || []).map((f, j) => (
                           <span key={j} style={{ color: '#5C6C75', marginLeft: 8 }}>
@@ -310,6 +315,7 @@ export default function ThreatGraph({ url }) {
             <span>{positioned.length} nodes</span>
             <span>{edgeLines.length} edges</span>
             <span>Depth: {maxDepth}</span>
+          </div>
           </div>
         </>
       )}

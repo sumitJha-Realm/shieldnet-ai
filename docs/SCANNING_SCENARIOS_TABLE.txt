@@ -1,0 +1,220 @@
+URL EXAMPLES - QUICK COPY TABLE FORMAT
+====================================================================
+
+BENIGN URLS
+====================================================================
+google.com	Legitimate search engine	0-5	Allowed
+github.com	Code repository platform	0-5	Allowed
+stackoverflow.com	Developer Q&A platform	0-5	Allowed
+microsoft.com	Enterprise software company	0-5	Allowed
+wikipedia.org	Encyclopedia, trusted content	0-5	Allowed
+www.amazon.com	E-commerce platform	0-5	Allowed
+apple.com	Technology company	0-5	Allowed
+mozilla.org	Browser developer	0-5	Allowed
+docker.com	Container platform	0-5	Allowed
+kubernetes.io	Orchestration platform	0-5	Allowed
+
+
+PHISHING - HOMOGLYPHS
+====================================================================
+g00gle.com	Zero replaces O	Google lookalike	72-85	Blocked
+am4zon.com	4 replaces A	Amazon lookalike	70-82	Blocked
+appl3.com	3 replaces E	Apple lookalike	68-80	Blocked
+1bm.com	l and 1 replace characters	IBM lookalike	65-78	Blocked
+vv1ndows.com	v and l replace w	Windows lookalike	70-83	Blocked
+
+
+PHISHING - FAKE ALERTS/VERIFICATION
+====================================================================
+secure-paypal-confirm.com	PayPal fake verification	75-88	Blocked
+apple-id-verify.net	Apple ID fake verification	74-87	Blocked
+amazon-account-update.info	Amazon fake update notice	73-86	Blocked
+microsoft-security-alert.xyz	Windows fake security alert	76-89	Blocked
+fb-login-verify.tk	Facebook fake login verification	72-85	Blocked
+
+
+PHISHING - TYPOS/MISSPELLINGS
+====================================================================
+goog1e.com	Letter/number confusion	68-80	Blocked
+paipal.com	Missing letter	70-83	Blocked
+linkedln.com	Character substitution	69-81	Blocked
+gitbub.com	Typo in name	65-78	Blocked
+twiter.com	Missing letter	64-77	Blocked
+
+
+MALWARE URLs
+====================================================================
+malware-distribution-site.net	Trojan/worm hosting	85-95	Blocked
+ransomware-c2-server.xyz	Ransomware C2 server	92-98	Blocked
+exploit-kit-payload.tk	Exploit kit hosting	88-96	Blocked
+botnet-command-center.ru	Botnet command server	90-97	Blocked
+suspicious-executable-download.info	Malware dropper	84-94	Blocked
+worm-distribution.net	Worm hosting	86-95	Blocked
+spyware-installer.xyz	Spyware hosting	83-93	Blocked
+adware-pusher.tk	Adware hosting	78-88	Blocked
+
+
+C2 (COMMAND & CONTROL) URLs
+====================================================================
+c2-botnet-panel.tk	Botnet C2 panel	89-97	Blocked
+command-control-server.ru	C2 communication server	91-98	Blocked
+botnet-c2-communication.xyz	Botnet command channel	90-97	Blocked
+underground-c2-panel.net	Underground C2 marketplace	93-99	Blocked
+remote-access-trojan-c2.info	RAT C2 server	92-98	Blocked
+apt-command-center.ru	APT infrastructure	94-99	Blocked
+ransomware-negotiation-site.net	Ransomware negotiation	90-97	Blocked
+dga-sink-domain.tk	DGA sinkhole	87-95	Blocked
+
+
+DGA (DOMAIN GENERATION ALGORITHM) DOMAINS
+====================================================================
+xkfrzmkbpq.tk	Random consonants, no vowels	75-88	Blocked
+ndkqmxbzpg.net	Algorithmic pattern, vowel-light	73-86	Blocked
+qpxdvmkrst.xyz	All consonants, high entropy	76-89	Blocked
+bfjmkxqwpn.info	Unusual letter combinations	74-87	Blocked
+
+
+SUSPICIOUS DOMAINS
+====================================================================
+slightly-suspicious-domain.tk	Vague naming + suspicious TLD	58-70	Flagged
+looks-like-phishing.net	Phishing keywords	62-74	Flagged
+potential-scam-site.xyz	Scam keywords + risky TLD	65-77	Flagged
+questionable-business.info	Questionable purpose	60-72	Flagged
+unclear-legitimacy.tk	Unclear purpose	59-71	Flagged
+possibly-malicious.net	Malware-adjacent keywords	64-76	Flagged
+risky-download-site.xyz	Download + suspicious pattern	66-78	Flagged
+
+
+CANONICAL VARIANTS
+====================================================================
+google.com	Legitimate brand	Allowed	0-5
+www.google.com	Inherits from apex google.com	Allowed	0-5
+blocked-domain.net	Malicious domain	Blocked	92
+www.blocked-domain.net	Inherits from apex blocked-domain.net	Blocked	92
+
+
+CAMPAIGN-COORDINATED URLS
+====================================================================
+paypal-verify-account.tk	Campaign 001 PayPal	Blocked	82-89
+paypal-update-billing.xyz	Campaign 001 PayPal (same campaign)	Blocked	81-88
+paypal-security-alert.net	Campaign 001 PayPal (same campaign)	Blocked	83-90
+amazon-account-verify.tk	Campaign 002 Amazon	Blocked	80-87
+amazon-order-confirm.xyz	Campaign 002 Amazon (same campaign)	Blocked	79-86
+
+
+RISK SCORE REFERENCE
+====================================================================
+0-20		ALLOWED		GREEN		Safe, legitimate domains
+21-40		LOW RISK	YELLOW		Newer businesses, low confidence
+41-60		MEDIUM RISK	ORANGE		Questionable domains
+61-75		HIGH RISK	RED		Likely malicious
+76-100		CRITICAL	BLOCKED		Definitely malicious
+
+
+SIMPLE COPY-PASTE CURL COMMANDS
+====================================================================
+
+--- Test 1: Benign ---
+curl -X POST http://localhost:8000/api/v1/scan -H "Content-Type: application/json" -d '{"url": "google.com"}'
+
+--- Test 2: Phishing Homoglyph ---
+curl -X POST http://localhost:8000/api/v1/scan -H "Content-Type: application/json" -d '{"url": "g00gle.com"}'
+
+--- Test 3: Malware ---
+curl -X POST http://localhost:8000/api/v1/scan -H "Content-Type: application/json" -d '{"url": "malware-distribution-site.net"}'
+
+--- Test 4: DGA Domain ---
+curl -X POST http://localhost:8000/api/v1/scan -H "Content-Type: application/json" -d '{"url": "xkfrzmkbpq.tk"}'
+
+--- Test 5: Canonical Variant ---
+curl -X POST http://localhost:8000/api/v1/scan -H "Content-Type: application/json" -d '{"url": "www.google.com"}'
+
+--- Test 6: Campaign URL 1 ---
+curl -X POST http://localhost:8000/api/v1/scan -H "Content-Type: application/json" -d '{"url": "paypal-verify-account.tk"}'
+
+--- Test 7: Campaign URL 2 ---
+curl -X POST http://localhost:8000/api/v1/scan -H "Content-Type: application/json" -d '{"url": "paypal-update-billing.xyz"}'
+
+--- Test 8: C2 Infrastructure ---
+curl -X POST http://localhost:8000/api/v1/scan -H "Content-Type: application/json" -d '{"url": "c2-botnet-panel.tk"}'
+
+--- Test 9: Suspicious Domain ---
+curl -X POST http://localhost:8000/api/v1/scan -H "Content-Type: application/json" -d '{"url": "slightly-suspicious-domain.tk"}'
+
+--- Test 10: Phishing Fake Alert ---
+curl -X POST http://localhost:8000/api/v1/scan -H "Content-Type: application/json" -d '{"url": "secure-paypal-confirm.com"}'
+
+
+SCENARIO DESCRIPTIONS
+====================================================================
+
+Scenario 1: User Clicks Typosquatted Link
+Problem: User receives email link that looks like Google but isn't
+Demo: Show g00gle.com blocked (Risk 75), compare with google.com allowed (Risk 2)
+Message: Scanner prevents credential theft before it happens
+
+Scenario 2: Ransomware Delivery Email
+Problem: Email link to malware-hosting domain
+Demo: Show malware-distribution-site.net blocked (Risk 92)
+Message: Scanner detects malware-hosting domains and prevents infection
+
+Scenario 3: Botnet Infection Prevention
+Problem: Infected machine trying to contact C2 server
+Demo: Show c2-botnet-panel.tk blocked (Risk 94)
+Message: Scanner prevents bot command-and-control communication
+
+Scenario 4: Coordinated Phishing Campaign
+Problem: Multiple phishing domains targeting PayPal users
+Demo: Show paypal-verify-account.tk and paypal-update-billing.xyz (same campaign)
+Message: Scanner identifies organized attacks and blocks all related URLs
+
+Scenario 5: Domain Canonicalization
+Problem: www.google.com should be treated same as google.com
+Demo: Show both google.com and www.google.com have same status and risk
+Message: Scanner normalizes domain variants for consistent protection
+
+Scenario 6: DGA Domain Detection
+Problem: Malware using domain generation algorithm to create random domains
+Demo: Show xkfrzmkbpq.tk blocked (Risk 81)
+Message: Scanner detects algorithmic patterns and entropy anomalies
+
+
+KEY TALKING POINTS
+====================================================================
+
+1. COMPREHENSIVE THREAT DETECTION
+   Detects: Phishing, Malware, C2, DGA, Homoglyphs, Typosquatting, Campaigns
+   
+2. MULTI-FACTOR ANALYSIS
+   Analyzes: Keywords, Reputation, Domain Age, SSL Certs, Hosting, Embeddings
+   
+3. SMART CANONICALIZATION
+   Treats: google.com and www.google.com as same entity
+   Prevents: Status divergence between variants
+   
+4. CAMPAIGN DETECTION
+   Clusters: Related domains into coordinated attacks
+   Blocks: All campaign URLs at once
+   
+5. CONSERVATIVE BY DEFAULT
+   Prioritizes: User safety (low false positives)
+   Shows: Clear risk reasoning for each domain
+   
+6. PRODUCTION READY
+   API: /api/v1/scan with risk scores, status, reasons
+   Database: All threats indexed for fast lookup
+   UI: Threat database with search and filtering
+
+
+BEST URLS FOR DEMO PRESENTATION
+====================================================================
+
+For executives: google.com (safe) vs g00gle.com (blocked)
+For security team: c2-botnet-panel.tk (C2 detection), xkfrzmkbpq.tk (DGA)
+For end users: phishing narratives with paypal-verify-account.tk
+For developers: canonical alignment with www.google.com
+For analysts: campaign clustering with PayPal phishing URLs
+
+
+END OF QUICK REFERENCE
+====================================================================

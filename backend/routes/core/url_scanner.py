@@ -40,10 +40,11 @@ async def list_urls(
     limit: int = 20,
     status: str | None = None,
     classification: str | None = None,
+    domain: str | None = None,
     service: URLAnalysisService = Depends(get_url_analysis_service),
 ):
-    """List all analyzed URLs with pagination."""
-    return await service.list_urls(skip=skip, limit=limit, status=status, classification=classification)
+    """List all analyzed URLs with pagination. Filter by status, classification, or baseDomain."""
+    return await service.list_urls(skip=skip, limit=limit, status=status, classification=classification, domain=domain)
 
 
 @router.get("/urls/{url_id}")

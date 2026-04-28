@@ -4,17 +4,22 @@ import logging
 import time
 from datetime import datetime
 from typing import Optional
+from urllib.parse import urlparse
 
 from repositories.impl.url_repository import URLRepository
 from repositories.impl.scan_rules_repository import ScanRulesRepository
 from services.embedding_service import get_embedding
+from services.search.atlas_search_service import AtlasSearchService
 from services.search.vector_search_service import VectorSearchService
 from services.waterfall_cache import WaterfallCache
 from services.url_graph_service import URLGraphService
+from services.campaign_detection_service import CampaignDetectionService
 from utils.url_feature_extractor import (
     extract_features,
     enrich_features,
     build_summary_text,
+    build_campaign_enriched_summary,
+    find_phishing_keyword_matches,
     calculate_risk_score,
     classify_threat,
     risk_level,
@@ -32,15 +37,34 @@ class URLAnalysisService:
         self,
         url_repo: URLRepository,
         vector_search_service: "VectorSearchService",
+        atlas_search_service: Optional["AtlasSearchService"] = None,
         cache: Optional["WaterfallCache"] = None,
         rules_repo: Optional["ScanRulesRepository"] = None,
         graph_service: Optional["URLGraphService"] = None,
+        campaign_service: Optional["CampaignDetectionService"] = None,
     ):
         self._url_repo = url_repo
         self._vector_search = vector_search_service
+        self._atlas_search = atlas_search_service
         self._cache = cache or WaterfallCache()
         self._rules_repo = rules_repo
         self._graph_service = graph_service
+        self._campaign_service = campaign_service
+
+    @staticmethod
+    def _extract_domain(url: str) -> str:
+        try:
+            parsed = urlparse(url if "://" in url else f"http://{url}")
+        except Exception:
+            parsed = urlparse(f"http://{url}")
+        return (parsed.hostname or parsed.netloc or url or "").strip().lower().rstrip(".")
+
+    @staticmethod
+    def _canonical_domain(domain: str) -> str:
+        d = (domain or "").strip().lower().rstrip(".")
+        if d.startswith("www.") and d.count(".") >= 2:
+            return d[4:]
+        return d
 
     async def scan_url(self, url: str) -> dict:
         """Full URL scanning pipeline with waterfall enforcement.
@@ -69,14 +93,26 @@ class URLAnalysisService:
             logger.info("L1 cache hit for %s (%.2fms)", url, elapsed)
             return cached
 
-        # ── L2: MongoDB exact-URL lookup ─────────────────────────────────
+        scanned_domain = self._extract_domain(url)
+        canonical_domain = self._canonical_domain(scanned_domain)
+
+        # ── L2: MongoDB exact-URL lookup + canonical authority ───────────
         existing = await self._url_repo.find_by_url(url)
+        canonical_authority = None
+        if canonical_domain:
+            try:
+                canonical_authority = await self._url_repo.find_latest_by_canonical_domain(canonical_domain)
+            except Exception as e:
+                logger.warning("Canonical domain lookup failed for %s: %s", canonical_domain, e)
+
         if existing and existing.get("embedding"):
             elapsed = (time.monotonic() - start) * 1000
             logger.info("L2 DB hit for %s (%.2fms)", url, elapsed)
             # Re-run vector search with stored embedding for fresh intel
             result = await self._run_full_analysis(
                 url, existing_record=existing, existing_embedding=existing["embedding"],
+                authoritative_record=canonical_authority,
+                canonical_domain=canonical_domain,
                 rules=rules,
             )
             result["waterfallTier"] = "L2_DATABASE"
@@ -85,7 +121,13 @@ class URLAnalysisService:
             return result
 
         # ── L3: Full analysis pipeline ───────────────────────────────────
-        result = await self._run_full_analysis(url, rules=rules)
+        result = await self._run_full_analysis(
+            url,
+            existing_record=existing,
+            authoritative_record=canonical_authority,
+            canonical_domain=canonical_domain,
+            rules=rules,
+        )
         result["waterfallTier"] = "L3_FULL_PIPELINE"
         result["latencyMs"] = round((time.monotonic() - start) * 1000, 2)
         self._cache.put(url, result)
@@ -96,6 +138,8 @@ class URLAnalysisService:
         self, url: str,
         existing_record: dict = None,
         existing_embedding: list = None,
+        authoritative_record: dict = None,
+        canonical_domain: str = "",
         rules: dict = None,
     ) -> dict:
         """Run the complete analysis pipeline."""
@@ -112,6 +156,7 @@ class URLAnalysisService:
 
         # 1. Feature extraction + advanced enrichment
         features = extract_features(url)
+        features["canonicalDomain"] = canonical_domain or self._canonical_domain(features.get("domain", ""))
         features = enrich_features(url, features, modules=modules)
         features["payloadTypes"] = detect_payload_types(url)
 
@@ -133,16 +178,27 @@ class URLAnalysisService:
         threat_intel_matches = []
         max_similarity = 0.0
         max_intel_similarity = 0.0
+        atlas_signals = {
+            "query": "",
+            "matchCount": 0,
+            "maxSearchScore": 0.0,
+            "matchedAttackCategories": [],
+            "matchedPayloadSignatures": [],
+        }
         scanned_domain = features["domain"].lower()
         vs_enabled = modules.get("vectorSearch", True)
         ti_enabled = modules.get("threatIntel", True)
+        atlas_enabled = modules.get("atlasSearch", True)
         combined_limit = vector_limit + (10 if ti_enabled else 0)
 
+        vector_search_ms: float = 0.0
         if embedding and vs_enabled:
             try:
+                _vs_start = time.monotonic()
                 raw_results = await self._vector_search.search_similar(
                     query_vector=embedding, limit=combined_limit
                 )
+                vector_search_ms = round((time.monotonic() - _vs_start) * 1000, 2)
                 # Split results: scan docs vs threat intel docs
                 for m in raw_results:
                     doc_type = m.get("docType", "scan")
@@ -173,6 +229,35 @@ class URLAnalysisService:
             except Exception as e:
                 logger.warning("Vector search failed: %s", e)
 
+        # 4b. Atlas lexical enrichment (threat-intel focused)
+        if self._atlas_search and atlas_enabled and ti_enabled:
+            try:
+                atlas_query = " ".join(filter(None, [
+                    features.get("domain", ""),
+                    *features.get("payloadTypes", [])[:2],
+                ])).strip()
+                atlas_signals["query"] = atlas_query
+                if atlas_query:
+                    atlas_res = await self._atlas_search.search(
+                        query=atlas_query,
+                        fuzzy_max_edits=1,
+                        limit=8,
+                    )
+                    atlas_results = [
+                        r for r in atlas_res.get("results", [])
+                        if r.get("docType") == "threat_intel"
+                    ]
+                    atlas_signals["matchCount"] = len(atlas_results)
+                    atlas_signals["maxSearchScore"] = max((r.get("score", 0.0) for r in atlas_results), default=0.0)
+                    atlas_signals["matchedAttackCategories"] = list({
+                        r.get("attackCategory") for r in atlas_results if r.get("attackCategory")
+                    })[:6]
+                    atlas_signals["matchedPayloadSignatures"] = list({
+                        r.get("payloadSignature") for r in atlas_results if r.get("payloadSignature")
+                    })[:6]
+            except Exception as e:
+                logger.warning("Atlas lexical enrichment failed: %s", e)
+
         # 5. Risk scoring (use best similarity from either source)
         best_similarity = max(max_similarity, max_intel_similarity)
         risk, risk_breakdown = calculate_risk_score(
@@ -180,8 +265,36 @@ class URLAnalysisService:
             url=url, hard_floors=hard_floors, phishing_keywords=phishing_kw,
             intel_match_count=len(threat_intel_matches),
             max_intel_similarity=max_intel_similarity,
+            atlas_match_count=atlas_signals["matchCount"],
+            max_atlas_score=atlas_signals["maxSearchScore"],
         )
         classification = classify_threat(risk, thresholds=thresholds)
+
+        authority = authoritative_record
+        risk_alignment_note = None
+        if authority and authority.get("url") and authority.get("url") != url:
+            authority_risk = authority.get("riskScore")
+            if authority_risk is not None:
+                try:
+                    aligned_risk = round(float(authority_risk), 1)
+                    if aligned_risk != risk:
+                        prior_risk = risk
+                        risk = aligned_risk
+                        classification = classify_threat(risk, thresholds=thresholds)
+                        risk_breakdown.append({
+                            "factor": "Canonical Domain Alignment",
+                            "key": "canonicalAlignment",
+                            "raw": aligned_risk,
+                            "weight": 1.0,
+                            "contribution": round(aligned_risk - prior_risk, 2),
+                            "sourceUrl": authority.get("url"),
+                        })
+                        risk_alignment_note = (
+                            f"Risk score aligned to canonical peer URL '{authority.get('url')}' "
+                            f"for domain family '{features['canonicalDomain']}'."
+                        )
+                except (TypeError, ValueError):
+                    pass
 
         # 6. Rebuild summary text with ALL fields (classification, risk, status, scanCount)
         now = datetime.utcnow()
@@ -189,10 +302,10 @@ class URLAnalysisService:
         scan_count = (existing_record.get("scanCount", 0) + 1) if existing_record else 1
         computed_status = "blocked" if risk >= block_score else ("under_review" if risk >= review_score else "allowed")
 
-        # ── Status lock: on exact URL re-scan, preserve the previous status ──
+        # ── Status lock: preserve canonical-domain authoritative status ──
         status_override_note = None
-        if existing_record and existing_record.get("status"):
-            prev_status = existing_record["status"]
+        if authority and authority.get("status"):
+            prev_status = authority["status"]
             status_val = prev_status  # keep the authoritative status
             if prev_status != computed_status:
                 _status_labels = {
@@ -208,6 +321,10 @@ class URLAnalysisService:
                 )
         else:
             status_val = computed_status
+
+        if risk_alignment_note:
+            status_override_note = f"{status_override_note} {risk_alignment_note}" if status_override_note else risk_alignment_note
+
         summary_text = build_summary_text(
             url, features,
             classification=classification,
@@ -220,6 +337,7 @@ class URLAnalysisService:
         record = {
             "url": url,
             "domain": features["domain"],
+            "canonicalDomain": features["canonicalDomain"],
             "submissionDate": now,
             "source": "gov_employee_report",
             "dnsStatus": features["dnsStatus"],
@@ -237,6 +355,7 @@ class URLAnalysisService:
             "reviewedBy": "system_ai",
             "summaryText": summary_text,
             "embedding": embedding,
+            "atlasSignals": atlas_signals,
             # ── New metadata ──────────────────────────────────────────
             "queryParams": features.get("queryParams", {}),
             "payloadTypes": payload_types,
@@ -247,7 +366,10 @@ class URLAnalysisService:
             "firstSeenAt": existing_record.get("firstSeenAt", now) if existing_record else now,
             "lastSeenAt": now,
             "relatedDomains": [],    # populated by graph service
+            "campaignId": existing_record.get("campaignId") if existing_record else None,
+            "campaignName": existing_record.get("campaignName") if existing_record else None,
             "statusNote": status_override_note,
+            "canonicalAuthorityUrl": authority.get("url") if authority else None,
             "createdAt": existing_record.get("createdAt", now) if existing_record else now,
             "updatedAt": now,
         }
@@ -283,13 +405,75 @@ class URLAnalysisService:
             except Exception as e:
                 logger.warning("Graph edge creation failed: %s", e)
 
+        # 10. Campaign detection — cluster vector neighbours into campaigns
+        campaign = None
+        if self._campaign_service and (similar_threats or threat_intel_matches):
+            try:
+                campaign = await self._campaign_service.detect_and_tag(
+                    scanned_url=url,
+                    scanned_domain=features["domain"],
+                    scanned_risk=risk,
+                    scanned_classification=classification,
+                    similar_threats=similar_threats,
+                    threat_intel_matches=threat_intel_matches,
+                    atlas_signals=atlas_signals,
+                    url_record=record,
+                )
+                if campaign:
+                    record["campaignId"] = campaign["_id"]
+                    record["campaignName"] = campaign.get("name")
+                    # Re-embed synchronously with campaign context baked in.
+                    # The stored embedding now carries both URL threat signals and
+                    # campaign semantics — a single vector query is sufficient for
+                    # all future lookups (no second query or background task needed).
+                    try:
+                        enriched_summary = build_campaign_enriched_summary(
+                            url=url,
+                            features=features,
+                            campaign=campaign,
+                            classification=classification,
+                            risk_score=risk,
+                            status=status_val,
+                            scan_count=scan_count,
+                        )
+                        enriched_embedding = await get_embedding(enriched_summary)
+                        record["summaryText"] = enriched_summary
+                        record["embedding"] = enriched_embedding
+                    except Exception as emb_err:
+                        logger.warning("Campaign re-embed failed: %s — keeping base embedding", emb_err)
+                    await self._url_repo.update_one(
+                        record["_id"],
+                        {
+                            "campaignId": record["campaignId"],
+                            "campaignName": record["campaignName"],
+                            "summaryText": record["summaryText"],
+                            "embedding": record["embedding"],
+                        },
+                    )
+            except Exception as e:
+                logger.warning("Campaign detection failed: %s", e)
+
+        # If no fresh campaign was detected, hydrate from existing linkage.
+        if not campaign and self._campaign_service:
+            campaign_ref = record.get("campaignId")
+            if campaign_ref:
+                try:
+                    campaign = await self._campaign_service.get_campaign(campaign_ref)
+                    if campaign:
+                        record["campaignName"] = campaign.get("name")
+                except Exception as e:
+                    logger.warning("Campaign hydration failed for %s: %s", campaign_ref, e)
+
         result = {
             "urlRecord": record,
             "similarThreats": similar_threats,
             "threatIntelMatches": threat_intel_matches,
+            "atlasSearchSignals": atlas_signals,
+            "campaign": campaign,
             "recommendedAction": recommended_action(risk, thresholds=thresholds),
             "riskLevel": risk_level(risk, thresholds=thresholds),
             "riskBreakdown": risk_breakdown,
+            "vectorSearchMs": vector_search_ms,
             "analysisSummary": self._build_analysis_summary(
                 url, features, classification, risk, record["status"],
                 similar_threats, threat_intel_matches,
@@ -419,8 +603,13 @@ class URLAnalysisService:
             "confirm", "banking", "password", "credential", "auth",
             "portal", "validate", "suspend", "unlock", "otp", "kyc",
         }
-        url_lower = url.lower()
-        kw_found = [kw for kw in _PHISHING_KW if kw in url_lower]
+        kw_matches = find_phishing_keyword_matches(
+            text=f"{domain.lower()} {url.lower()}",
+            keywords=_PHISHING_KW,
+            max_edit_distance=2,
+            long_keyword_edit_distance=3,
+        )
+        kw_found = kw_matches["allKeywords"]
         if kw_found:
             kw_docs = [
                 self._slim_doc(t)
@@ -428,10 +617,20 @@ class URLAnalysisService:
                 if t.get("status") == "blocked"
                 and any(kw in (t.get("url") or "").lower() for kw in kw_found)
             ]
+            fuzzy_hits = kw_matches["fuzzy"]
+            fuzzy_note = ""
+            if fuzzy_hits:
+                top_fuzzy = ", ".join(
+                    f"{m['token']}~{m['keyword']} (d={m['distance']})"
+                    for m in fuzzy_hits[:3]
+                )
+                fuzzy_note = (
+                    f" Typo-tolerant matches detected: {top_fuzzy}."
+                )
             reasons.append(_reason(
                 f"🎣 PHISHING KEYWORDS — URL contains {len(kw_found)} social engineering "
                 f"keyword(s): {', '.join(kw_found)}. These terms are used to create urgency "
-                "and trick users into submitting credentials.",
+                f"and trick users into submitting credentials.{fuzzy_note}",
                 tag="phishing_keywords", matched_docs=kw_docs,
             ))
 
@@ -588,13 +787,19 @@ class URLAnalysisService:
 
     async def list_urls(
         self, skip: int = 0, limit: int = 20, status: Optional[str] = None,
-        classification: Optional[str] = None,
+        classification: Optional[str] = None, domain: Optional[str] = None,
     ) -> dict:
         filter_doc: dict = {}
         if status:
             filter_doc["status"] = status
         if classification:
             filter_doc["threatClassification"] = classification
+        if domain:
+            # Match either the baseDomain (canonical anchor) or the exact domain
+            filter_doc["$or"] = [
+                {"baseDomain": domain},
+                {"domain": domain},
+            ]
         urls = await self._url_repo.find_many(
             filter_doc=filter_doc, skip=skip, limit=limit,
             sort=[("createdAt", -1)],

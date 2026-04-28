@@ -12,6 +12,7 @@ export default function ThreatsPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [error, setError] = useState('');
   const [filters, setFilters] = useState({});
   const [selectedThreat, setSelectedThreat] = useState(null);
   const [page, setPage] = useState(0);
@@ -19,15 +20,20 @@ export default function ThreatsPage() {
 
   const fetchURLs = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const params = { skip: page * limit, limit };
       if (filters.classification) params.classification = filters.classification;
       if (filters.status) params.status = filters.status;
+      if (filters.domain) params.domain = filters.domain;
       const res = await listURLs(params);
       setUrls(res.data?.urls || []);
       setTotal(res.data?.total || 0);
     } catch (err) {
       console.error('Failed to fetch URLs:', err);
+      setUrls([]);
+      setTotal(0);
+      setError(err?.response?.data?.detail || err?.message || 'Failed to load Threat Database data.');
     } finally {
       setLoading(false);
     }
@@ -39,6 +45,7 @@ export default function ThreatsPage() {
 
   const handleSearch = async (query) => {
     setSearchLoading(true);
+    setError('');
     try {
       const res = await atlasSearch({
         query,
@@ -49,6 +56,9 @@ export default function ThreatsPage() {
       setTotal(res.data?.totalResults || 0);
     } catch (err) {
       console.error('Search failed:', err);
+      setUrls([]);
+      setTotal(0);
+      setError(err?.response?.data?.detail || err?.message || 'Threat search failed.');
     } finally {
       setSearchLoading(false);
     }
@@ -76,6 +86,57 @@ export default function ThreatsPage() {
         <FacetedFilters filters={filters} onChange={(f) => { setFilters(f); setPage(0); }} />
 
         <div>
+          {error && (
+            <div
+              style={{
+                marginBottom: 12,
+                border: '1px solid #F9D3C8',
+                background: '#FFF1ED',
+                color: '#9C2B10',
+                borderRadius: 8,
+                padding: '10px 12px',
+                fontSize: 13,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
+            >
+              <span>Threat Database failed to load: {error}</span>
+              <button
+                onClick={fetchURLs}
+                style={{
+                  border: '1px solid #E8A18D',
+                  background: '#fff',
+                  color: '#9C2B10',
+                  borderRadius: 6,
+                  padding: '6px 10px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {!loading && !error && total === 0 && (
+            <div
+              style={{
+                marginBottom: 12,
+                border: '1px solid #E8EDEB',
+                background: '#F9FAFB',
+                color: '#45525B',
+                borderRadius: 8,
+                padding: '10px 12px',
+                fontSize: 13,
+              }}
+            >
+              No rows matched the current search/filters.
+            </div>
+          )}
+
           <ThreatTable urls={urls} onRowClick={setSelectedThreat} />
 
           {/* Pagination */}

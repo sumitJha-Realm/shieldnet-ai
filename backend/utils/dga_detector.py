@@ -204,17 +204,18 @@ def detect_homoglyphs(domain: str) -> dict:
             best_similarity = sim
             best_target = legit
 
-    # If the domain IS a known legitimate domain (no confusable normalization
-    # needed), skip all homoglyph checks.  Only skip when the raw domain AND
-    # its normalized form both land in the allow-list — i.e. the domain is
-    # genuinely legitimate, not a confusable variant like g0v.in → gov.in.
-    if clean in _ALL_PROTECTED_DOMAINS and normalized == clean:
-        return {
-            "hasHomoglyphs": False,
-            "homoglyphSignals": [],
-            "targetDomain": clean,
-            "visualSimilarity": 1.0,
-        }
+    # If the domain is a known legitimate domain OR a legitimate subdomain of
+    # one (e.g. www.google.com), skip homoglyph checks when no normalization
+    # change occurred.  This avoids false positives for normal subdomain usage.
+    if normalized == clean:
+        for legit in _ALL_PROTECTED_DOMAINS:
+            if clean == legit or clean.endswith(f".{legit}"):
+                return {
+                    "hasHomoglyphs": False,
+                    "homoglyphSignals": [],
+                    "targetDomain": legit,
+                    "visualSimilarity": 1.0,
+                }
 
     # If normalizing confusables maps to a legitimate domain, that's an attack
     if normalized != clean and normalized in _ALL_PROTECTED_DOMAINS:

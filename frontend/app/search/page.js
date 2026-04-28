@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import SearchBar from '../../components/search/SearchBar';
 import SearchResults from '../../components/search/VectorSearchResults';
 import HybridResults from '../../components/search/HybridResults';
+import SearchFeatureShowcase from '../../components/search/SearchFeatureShowcase';
 import { atlasSearch, vectorSearch, hybridSearch, unifiedSearch, getDemoScenarios } from '../../lib/api';
 
 const TABS = [
@@ -83,6 +84,8 @@ export default function SearchPlaygroundPage() {
       </div>
 
       <SearchBar onSearch={handleSearch} loading={loading} placeholder={`Search with ${TABS.find(t => t.key === activeTab)?.label}...`} />
+
+      <SearchFeatureShowcase activeTab={activeTab} result={result} />
 
       {error && (
         <div style={{

@@ -1,0 +1,207 @@
+SHIELDNET AI - URL SCANNING EXAMPLES CHEAT SHEET
+================================================
+
+COPY-PASTE READY FORMAT
+
+
+SECTION 1: BENIGN URLS (Safe - Allowed Status)
+================================================
+
+google.com
+github.com
+stackoverflow.com
+microsoft.com
+wikipedia.org
+amazon.com
+apple.com
+
+
+SECTION 2: PHISHING - CHARACTER SUBSTITUTION
+================================================
+
+g00gle.com (zero replaces O, looks like Google)
+am4zon.com (4 replaces A, looks like Amazon)
+appl3.com (3 replaces E, looks like Apple)
+1bm.com (looks like IBM)
+vv1ndows.com (looks like Windows)
+
+
+SECTION 3: PHISHING - TYPOS & MISSPELLINGS
+================================================
+
+goog1e.com
+paipal.com
+linkedln.com
+gitbub.com
+twiter.com
+
+
+SECTION 4: PHISHING - FAKE ALERTS
+================================================
+
+secure-paypal-confirm.com
+apple-id-verify.net
+amazon-account-update.info
+microsoft-security-alert.xyz
+fb-login-verify.tk
+
+
+SECTION 5: MALWARE HOSTING
+================================================
+
+malware-distribution-site.net
+ransomware-c2-server.xyz
+exploit-kit-payload.tk
+botnet-command-center.ru
+suspicious-executable-download.info
+worm-distribution.net
+spyware-installer.xyz
+adware-pusher.tk
+
+
+SECTION 6: C2 (COMMAND & CONTROL)
+================================================
+
+c2-botnet-panel.tk
+command-control-server.ru
+botnet-c2-communication.xyz
+underground-c2-panel.net
+remote-access-trojan-c2.info
+apt-command-center.ru
+ransomware-negotiation-site.net
+
+
+SECTION 7: DGA (ALGORITHMIC DOMAINS)
+================================================
+
+xkfrzmkbpq.tk
+ndkqmxbzpg.net
+qpxdvmkrst.xyz
+bfjmkxqwpn.info
+
+
+SECTION 8: SUSPICIOUS
+================================================
+
+slightly-suspicious-domain.tk
+looks-like-phishing.net
+potential-scam-site.xyz
+questionable-business.info
+unclear-legitimacy.tk
+possibly-malicious.net
+risky-download-site.xyz
+
+
+SECTION 9: DOMAIN VARIANTS (CANONICALIZATION TEST)
+================================================
+
+google.com (expected: Allowed)
+www.google.com (expected: Allowed - same as apex)
+blocked-domain.net (expected: Blocked)
+www.blocked-domain.net (expected: Blocked - same as apex)
+
+
+SECTION 10: CAMPAIGN-COORDINATED URLS
+================================================
+
+CAMPAIGN 001: PayPal Phishing
+- paypal-verify-account.tk
+- paypal-update-billing.xyz
+- paypal-security-alert.net
+
+CAMPAIGN 002: Amazon Phishing
+- amazon-account-verify.tk
+- amazon-order-confirm.xyz
+
+
+BEST URLs BY FEATURE
+================================================
+
+Demo Benign:           google.com
+Demo Phishing:         g00gle.com
+Demo Malware:          malware-distribution-site.net
+Demo DGA:              xkfrzmkbpq.tk
+Demo Canonical:        www.google.com
+Demo Campaign:         paypal-verify-account.tk
+Demo C2:               c2-botnet-panel.tk
+Demo Suspicious:       slightly-suspicious-domain.tk
+
+
+RISK SCORE QUICK GUIDE
+================================================
+
+0-20:   GREEN - ALLOWED (Safe websites)
+21-40:  YELLOW - LOW RISK (Newer/unverified)
+41-60:  ORANGE - MEDIUM RISK (Questionable)
+61-75:  RED - HIGH RISK (Likely malicious)
+76-100: BLOCKED - CRITICAL (Definitely malicious)
+
+
+ONE-LINE CURL COMMANDS (COPY PASTE)
+================================================
+
+curl -X POST http://localhost:8000/api/v1/scan -H "Content-Type: application/json" -d '{"url": "google.com"}'
+curl -X POST http://localhost:8000/api/v1/scan -H "Content-Type: application/json" -d '{"url": "g00gle.com"}'
+curl -X POST http://localhost:8000/api/v1/scan -H "Content-Type: application/json" -d '{"url": "malware-distribution-site.net"}'
+curl -X POST http://localhost:8000/api/v1/scan -H "Content-Type: application/json" -d '{"url": "xkfrzmkbpq.tk"}'
+curl -X POST http://localhost:8000/api/v1/scan -H "Content-Type: application/json" -d '{"url": "www.google.com"}'
+curl -X POST http://localhost:8000/api/v1/scan -H "Content-Type: application/json" -d '{"url": "paypal-verify-account.tk"}'
+curl -X POST http://localhost:8000/api/v1/scan -H "Content-Type: application/json" -d '{"url": "c2-botnet-panel.tk"}'
+
+
+DEMO SCENARIOS TO EXPLAIN
+================================================
+
+Scenario 1 - Typosquatting:
+User clicks link thinking it's google.com but gets g00gle.com (blocked)
+
+Scenario 2 - Malware:
+Email link to malware-distribution-site.net gets blocked
+
+Scenario 3 - Botnet:
+Infected machine tries contacting c2-botnet-panel.tk (blocked)
+
+Scenario 4 - Phishing Campaign:
+Attacker sends multiple PayPal phishing URLs - all detected as same campaign
+
+Scenario 5 - Domain Variants:
+www.google.com inherits status from apex google.com (consistent protection)
+
+Scenario 6 - DGA:
+Random algorithm-generated domain xkfrzmkbpq.tk detected by entropy analysis
+
+
+TALKING POINTS
+================================================
+
+✓ Detects: Phishing, Malware, C2, DGA, Homoglyphs, Typos, Campaigns
+✓ Analyzes: Keywords, Reputation, Domain Age, SSL, Hosting, Embeddings
+✓ Canonicalizes: google.com and www.google.com treated as same entity
+✓ Campaigns: Clusters related domains into coordinated attack groups
+✓ Safe by Default: Prioritizes user safety (low false positives)
+✓ Transparent: Shows clear reasoning for each risk score
+
+
+FILE LOCATIONS
+================================================
+
+Full Guide:          docs/SCANNING_SCENARIOS.md
+Plain Text:          docs/SCANNING_SCENARIOS_PLAIN.txt
+Table Format:        docs/SCANNING_SCENARIOS_TABLE.txt
+CSV (Excel/Sheets):  docs/SCANNING_EXAMPLES.csv
+This Cheat Sheet:    docs/SCANNING_CHEATSHEET.txt
+
+
+NEXT STEPS
+================================================
+
+1. Copy URLs from this file into your demo
+2. Use curl commands above to test each URL
+3. Show risk scores and reasons to stakeholders
+4. Use scenarios to explain threat detection
+5. Reference full guides for detailed information
+
+
+================================================
+END OF CHEAT SHEET
+================================================

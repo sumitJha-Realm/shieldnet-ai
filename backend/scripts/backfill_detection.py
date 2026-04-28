@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 MONGODB_URI = os.getenv(
     "MONGODB_URI",
-    "mongodb+srv://<username>:<password>@cluster0.fn9o25.mongodb.net/?retryWrites=true&w=majority",
+    "mongodb://localhost:27017",
 )
 DB_NAME = os.getenv("DATABASE_NAME", "shieldnet-ai")
 

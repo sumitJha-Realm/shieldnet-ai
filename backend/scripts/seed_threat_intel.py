@@ -1,6 +1,11 @@
 """Seed threat_intel_feeds with 1000+ URLs that have legitimate base domains
 but suspicious payloads, paths, and query parameters.
 
+Campaign-aware seeding: threat intel entries are organised into pre-defined
+campaigns so their embeddings already carry campaign context.  Future URL
+scans against these entries will naturally resolve to the right campaign via
+single-query vector search neighbor consensus.
+
 Usage:
     cd backend
     poetry run python -m scripts.seed_threat_intel
@@ -451,14 +456,140 @@ SEVERITY_TTL = {
     "low": 30,
 }
 
+# ── Synthetic campaign clusters ──────────────────────────────────────────────
+# These are inserted into the campaigns collection during seeding so threat
+# intel entries that belong to a campaign carry campaign context in their
+# embeddings.  The IDs are simple string keys resolved to ObjectIds at runtime.
+SYNTHETIC_CAMPAIGNS = [
+    {
+        "name": "Banking Phishing Wave Q1",
+        "attackCategory": "credential_harvest",
+        "threatType": "phishing",
+        "severity": "critical",
+        "status": "active",
+        "urlCount": 35,
+        "avgRiskScore": 91.0,
+        "avgSimilarity": 0.87,
+        "clusterSize": 35,
+        "sharedTlds": ["gov", "in", "org"],
+        "description": "Large-scale credential harvesting campaign targeting banking and government portal users.",
+    },
+    {
+        "name": "SQL Injection Government DB Campaign",
+        "attackCategory": "sqli",
+        "threatType": "malware",
+        "severity": "critical",
+        "status": "active",
+        "urlCount": 28,
+        "avgRiskScore": 95.0,
+        "avgSimilarity": 0.89,
+        "clusterSize": 28,
+        "sharedTlds": ["gov", "nic", "in"],
+        "description": "Automated SQL injection campaign targeting government database endpoints to exfiltrate citizen records.",
+    },
+    {
+        "name": "XSS Session Hijack Campaign",
+        "attackCategory": "xss",
+        "threatType": "phishing",
+        "severity": "high",
+        "status": "active",
+        "urlCount": 22,
+        "avgRiskScore": 85.0,
+        "avgSimilarity": 0.84,
+        "clusterSize": 22,
+        "sharedTlds": ["gov", "in"],
+        "description": "Cross-site scripting campaign injecting session-stealing payloads across government portals.",
+    },
+    {
+        "name": "Malware Download Supply Chain Attack",
+        "attackCategory": "supply_chain",
+        "threatType": "malware",
+        "severity": "critical",
+        "status": "active",
+        "urlCount": 18,
+        "avgRiskScore": 94.0,
+        "avgSimilarity": 0.91,
+        "clusterSize": 18,
+        "sharedTlds": ["gov", "org", "in"],
+        "description": "Backdoored dependency injection campaign targeting government software supply chain.",
+    },
+    {
+        "name": "SSRF Cloud Metadata Exfiltration Campaign",
+        "attackCategory": "ssrf",
+        "threatType": "c2",
+        "severity": "critical",
+        "status": "active",
+        "urlCount": 20,
+        "avgRiskScore": 93.0,
+        "avgSimilarity": 0.88,
+        "clusterSize": 20,
+        "sharedTlds": ["gov", "cloud", "in"],
+        "description": "SSRF attack campaign probing cloud metadata endpoints to harvest cloud credentials and IAM tokens.",
+    },
+    {
+        "name": "Watering Hole Exploit Kit Campaign",
+        "attackCategory": "watering_hole",
+        "threatType": "malware",
+        "severity": "critical",
+        "status": "active",
+        "urlCount": 15,
+        "avgRiskScore": 92.0,
+        "avgSimilarity": 0.86,
+        "clusterSize": 15,
+        "sharedTlds": ["gov", "in", "org"],
+        "description": "Watering hole campaign compromising government news and event pages with drive-by download exploit kits.",
+    },
+    {
+        "name": "DNS Tunneling C2 Campaign",
+        "attackCategory": "dns_tunneling",
+        "threatType": "c2",
+        "severity": "high",
+        "status": "active",
+        "urlCount": 12,
+        "avgRiskScore": 88.0,
+        "avgSimilarity": 0.85,
+        "clusterSize": 12,
+        "sharedTlds": ["xyz", "top", "tk"],
+        "description": "DNS tunneling campaign using encoded subdomain labels to exfiltrate data through covert DNS channels.",
+    },
+    {
+        "name": "API Mass Data Exfiltration Campaign",
+        "attackCategory": "api_abuse",
+        "threatType": "malware",
+        "severity": "critical",
+        "status": "active",
+        "urlCount": 16,
+        "avgRiskScore": 90.0,
+        "avgSimilarity": 0.83,
+        "clusterSize": 16,
+        "sharedTlds": ["gov", "nic", "in"],
+        "description": "Bulk data exfiltration campaign abusing government API endpoints to harvest PII records.",
+    },
+]
 
-def generate_feed_entry() -> dict:
-    """Generate a single threat intel feed entry with enriched metadata."""
+# How many campaign-tagged threat intel entries to generate per campaign
+CAMPAIGN_ENTRIES_PER = 25
+
+
+def generate_feed_entry(campaign: dict = None) -> dict:
+    """Generate a single threat intel feed entry with enriched metadata.
+
+    If `campaign` is provided, the entry is force-assigned to that attack
+    category and gets campaign context appended to its summaryText before
+    embedding, so vector search clusters it near other campaign members.
+    """
     generators, weights = zip(*URL_GENERATORS)
     gen_func = random.choices(generators, weights=weights, k=1)[0]
     url, description, threat_type, attack_category, target_domain = gen_func()
 
-    severity = ATTACK_SEVERITY.get(attack_category, "medium")
+    # Override attack category if this entry belongs to a campaign
+    if campaign:
+        attack_category = campaign["attackCategory"]
+        threat_type = campaign.get("threatType", threat_type)
+        severity = campaign.get("severity", ATTACK_SEVERITY.get(attack_category, "medium"))
+    else:
+        severity = ATTACK_SEVERITY.get(attack_category, "medium")
+
     reported_date = random_date(180)
 
     feed_name = random.choice(FEED_NAMES)
@@ -518,9 +649,29 @@ def generate_feed_entry() -> dict:
         "iocType": "url",
         "ttl": SEVERITY_TTL.get(severity, 90),
     }
-    # Build composite text from all fields and store it
+
     from utils.url_feature_extractor import build_threat_intel_text
-    entry["summaryText"] = build_threat_intel_text(entry)
+    base_text = build_threat_intel_text(entry)
+
+    if campaign:
+        # Bake campaign context into summaryText so the embedding carries it
+        cam_parts = [
+            "coordinated attack campaign detected",
+            f"campaign name {campaign['name']}",
+            f"attack category {attack_category}",
+            f"campaign severity {campaign['severity']}",
+            f"campaign url count {campaign['urlCount']}",
+            f"shared infrastructure TLDs {' '.join(campaign.get('sharedTlds', []))}",
+            f"average campaign risk score {campaign.get('avgRiskScore', 90):.0f}",
+            f"average cluster similarity {campaign.get('avgSimilarity', 0.85):.2f}",
+            f"cluster size {campaign.get('clusterSize', campaign['urlCount'])}",
+        ]
+        entry["summaryText"] = f"{base_text}, {', '.join(cam_parts)}"
+        entry["campaignId"] = campaign["_id"]
+        entry["campaignName"] = campaign["name"]
+    else:
+        entry["summaryText"] = base_text
+
     return entry
 
 
@@ -533,19 +684,66 @@ async def seed_threat_intel():
     del_result = await db["urls"].delete_many({"docType": "threat_intel"})
     logger.info("Removed %d existing threat_intel entries from urls collection", del_result.deleted_count)
 
-    # Generate 1300 entries (more diversity with 16 generators)
-    NUM_ENTRIES = 1300
+    # ── Step 1: Create synthetic campaign documents ──────────────────
+    from bson import ObjectId
+    now = datetime.utcnow()
+    logger.info("Creating %d synthetic campaign documents...", len(SYNTHETIC_CAMPAIGNS))
+
+    # Remove previously seeded campaigns (synthetic ones have a description)
+    del_camps = await db["campaigns"].delete_many({"description": {"$exists": True}})
+    logger.info("Removed %d previously seeded campaigns", del_camps.deleted_count)
+
+    campaigns_by_category: dict[str, dict] = {}
+    for camp_def in SYNTHETIC_CAMPAIGNS:
+        camp_doc = {
+            "_id": ObjectId(),
+            "name": camp_def["name"],
+            "attackCategory": camp_def["attackCategory"],
+            "severity": camp_def["severity"],
+            "status": camp_def["status"],
+            "urlCount": camp_def["urlCount"],
+            "avgRiskScore": camp_def["avgRiskScore"],
+            "avgSimilarity": camp_def["avgSimilarity"],
+            "clusterSize": camp_def["clusterSize"],
+            "sharedTlds": camp_def.get("sharedTlds", []),
+            "description": camp_def.get("description", ""),
+            "domains": [],
+            "urls": [],
+            "firstSeen": now - timedelta(days=random.randint(10, 60)),
+            "lastSeen": now - timedelta(days=random.randint(0, 5)),
+            "createdAt": now,
+            "updatedAt": now,
+        }
+        await db["campaigns"].insert_one(camp_doc)
+        camp_def["_id"] = camp_doc["_id"]
+        campaigns_by_category[camp_def["attackCategory"]] = camp_def
+        logger.info("  Created campaign: %s (%s)", camp_doc["name"], camp_doc["_id"])
+
+    # ── Step 2: Generate campaign-tagged entries ─────────────────────
+    campaign_entries: list[dict] = []
+    for camp in SYNTHETIC_CAMPAIGNS:
+        for _ in range(CAMPAIGN_ENTRIES_PER):
+            entry = generate_feed_entry(campaign=camp)
+            campaign_entries.append(entry)
+    logger.info("Generated %d campaign-tagged threat intel entries", len(campaign_entries))
+
+    # ── Step 3: Generate regular (non-campaign) entries ───────────────
+    NUM_ENTRIES = 1100
     feeds = [generate_feed_entry() for _ in range(NUM_ENTRIES)]
+    logger.info("Generated %d generic threat intel entries", len(feeds))
+
+    # Merge all entries
+    all_feeds = campaign_entries + feeds
 
     # Deduplicate by URL
     seen_urls = set()
     unique_feeds = []
-    for f in feeds:
+    for f in all_feeds:
         if f["url"] not in seen_urls:
             seen_urls.add(f["url"])
             unique_feeds.append(f)
     feeds = unique_feeds
-    logger.info("Generated %d unique threat intel feed entries", len(feeds))
+    logger.info("Deduped to %d unique threat intel feed entries", len(feeds))
 
     # Generate embeddings if Voyage AI key is available
     voyage_key = os.getenv("VOYAGE_AI_API_KEY")

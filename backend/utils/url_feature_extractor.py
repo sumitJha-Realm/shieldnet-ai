@@ -97,6 +97,96 @@ def calculate_entropy(text: str) -> float:
     return round(entropy, 2)
 
 
+def _levenshtein_distance(a: str, b: str) -> int:
+    """Compute Levenshtein edit distance using a memory-efficient DP row."""
+    if a == b:
+        return 0
+    if not a:
+        return len(b)
+    if not b:
+        return len(a)
+
+    if len(a) > len(b):
+        a, b = b, a
+
+    prev = list(range(len(a) + 1))
+    for i, ch_b in enumerate(b, start=1):
+        curr = [i]
+        for j, ch_a in enumerate(a, start=1):
+            ins = curr[j - 1] + 1
+            delete = prev[j] + 1
+            replace = prev[j - 1] + (0 if ch_a == ch_b else 1)
+            curr.append(min(ins, delete, replace))
+        prev = curr
+    return prev[-1]
+
+
+def find_phishing_keyword_matches(
+    text: str,
+    keywords: set[str] | list[str],
+    max_edit_distance: int = 2,
+    long_keyword_edit_distance: int = 3,
+    long_keyword_min_len: int = 9,
+) -> dict:
+    """Find exact and typo-tolerant phishing keyword matches in URL text.
+
+    Atlas fuzzy matching supports maxEdits up to 2. This helper extends local
+    scan-time keyword detection with optional distance-3 matching for long
+    phishing terms (e.g. credential-like tokens) in scanned URLs.
+    """
+    normalized = (text or "").lower()
+    kw_list = sorted({k.lower() for k in keywords if k})
+    if not normalized or not kw_list:
+        return {
+            "exact": [],
+            "fuzzy": [],
+            "allKeywords": [],
+        }
+
+    tokens = set(re.findall(r"[a-z0-9]{3,32}", normalized))
+    exact_hits = [kw for kw in kw_list if kw in normalized]
+    fuzzy_hits: list[dict] = []
+    exact_set = set(exact_hits)
+
+    for kw in kw_list:
+        if kw in exact_set:
+            continue
+
+        allowed_dist = max_edit_distance
+        if len(kw) >= long_keyword_min_len:
+            allowed_dist = max(allowed_dist, long_keyword_edit_distance)
+
+        best_token = None
+        best_dist = 999
+        min_len = max(3, len(kw) - allowed_dist)
+        max_len = len(kw) + allowed_dist
+        for token in tokens:
+            if len(token) < min_len or len(token) > max_len:
+                continue
+            dist = _levenshtein_distance(kw, token)
+            if dist < best_dist:
+                best_dist = dist
+                best_token = token
+                if dist == 1:
+                    break
+
+        if best_token is not None and 0 < best_dist <= allowed_dist:
+            fuzzy_hits.append(
+                {
+                    "keyword": kw,
+                    "token": best_token,
+                    "distance": best_dist,
+                }
+            )
+
+    all_keywords = sorted(set(exact_hits) | {m["keyword"] for m in fuzzy_hits})
+    return {
+        "exact": sorted(exact_hits),
+        "fuzzy": sorted(fuzzy_hits, key=lambda m: (m["distance"], m["keyword"])),
+        "allKeywords": all_keywords,
+    }
+
+
 def extract_features(url: str) -> dict:
     """Extract security-relevant features from a URL."""
     try:
@@ -315,6 +405,40 @@ def build_summary_text(url: str, features: dict, classification: str = "",
     return ", ".join(parts)
 
 
+def build_campaign_enriched_summary(
+    url: str,
+    features: dict,
+    campaign: dict,
+    classification: str = "",
+    risk_score: float = 0.0,
+    status: str = "",
+    scan_count: int = 1,
+) -> str:
+    """Build summaryText with campaign context baked in for richer embedding.
+
+    When a URL is assigned to a campaign, this re-embeds the URL with campaign
+    semantics so future vector searches naturally cluster campaign members closer.
+    """
+    base = build_summary_text(url, features, classification, risk_score, status, scan_count)
+
+    campaign_parts = list(filter(None, [
+        "coordinated attack campaign detected",
+        f"campaign name {campaign.get('name', '')}",
+        f"attack category {campaign.get('attackCategory', '')}",
+        f"campaign severity {campaign.get('severity', '')}",
+        f"campaign status {campaign.get('status', 'active')}",
+        f"campaign url count {campaign.get('urlCount', 0)}",
+        f"shared infrastructure TLDs {' '.join(campaign.get('sharedTlds', []))}",
+        f"average campaign risk score {campaign.get('avgRiskScore', 0):.0f}",
+        f"average cluster similarity {campaign.get('avgSimilarity', 0):.2f}",
+        f"cluster size {campaign.get('clusterSize', 0)}",
+        (f"linked domains {' '.join(campaign.get('domains', [])[:5])}"
+         if campaign.get('domains') else None),
+    ]))
+
+    return f"{base}, {', '.join(campaign_parts)}"
+
+
 def build_threat_intel_text(entry: dict) -> str:
     """Build a composite text from ALL threat intel feed fields for embedding.
 
@@ -404,25 +528,33 @@ def calculate_risk_score(
     phishing_keywords: list | None = None,
     intel_match_count: int = 0,
     max_intel_similarity: float = 0.0,
+    atlas_match_count: int = 0,
+    max_atlas_score: float = 0.0,
 ) -> tuple[float, list[dict]]:
     """Calculate risk score using weighted formula with DGA + homoglyph + structural features.
 
     Returns (score, breakdown) where breakdown is a list of factor contribution dicts.
     """
+    default_weights = {
+        "domainAge": 0.10,
+        "ssl": 0.03,
+        "entropy": 0.05,
+        "dns": 0.05,
+        "hosting": 0.03,
+        "vectorSimilarity": 0.15,
+        "atlasSearch": 0.08,
+        "dgaScore": 0.08,
+        "structuralScore": 0.10,
+        "homoglyphScore": 0.08,
+        "brandImpersonation": 0.15,
+        "payloadRisk": 0.18,
+    }
     if weights is None:
-        weights = {
-            "domainAge": 0.10,
-            "ssl": 0.03,
-            "entropy": 0.05,
-            "dns": 0.05,
-            "hosting": 0.03,
-            "vectorSimilarity": 0.15,
-            "dgaScore": 0.08,
-            "structuralScore": 0.10,
-            "homoglyphScore": 0.08,
-            "brandImpersonation": 0.15,
-            "payloadRisk": 0.18,
-        }
+        weights = default_weights
+    else:
+        # Keep admin-provided overrides while ensuring newly introduced factors
+        # still have sensible defaults if omitted from persisted rule configs.
+        weights = {**default_weights, **weights}
 
     hf = features["hostingFlags"]
     us = features["urlStructure"]
@@ -525,9 +657,19 @@ def calculate_risk_score(
     }
     url_lower = url.lower() if url else features.get("domain", "").lower()
     domain_lower = features["domain"].lower()
-    keyword_hits = [kw for kw in _PHISHING_KEYWORDS if kw in domain_lower or kw in url_lower]
-    # Each keyword adds up to 0.15 risk, capped at 0.5
-    keyword_bonus = min(len(keyword_hits) * 0.15, 0.5)
+    kw_matches = find_phishing_keyword_matches(
+        text=f"{domain_lower} {url_lower}",
+        keywords=_PHISHING_KEYWORDS,
+        max_edit_distance=2,
+        long_keyword_edit_distance=3,
+    )
+    keyword_hits = kw_matches["allKeywords"]
+    # Exact hits carry strongest signal; typo-tolerant hits are lighter.
+    exact_bonus = len(kw_matches["exact"]) * 0.15
+    fuzzy_bonus = 0.0
+    for m in kw_matches["fuzzy"]:
+        fuzzy_bonus += 0.10 if m["distance"] <= 2 else 0.06
+    keyword_bonus = min(exact_bonus + fuzzy_bonus, 0.5)
 
     # Build breakdown of each factor's weighted contribution
     factors = [
@@ -537,6 +679,7 @@ def calculate_risk_score(
         {"factor": "DNS Status", "key": "dns", "raw": round(dns_score, 3), "weight": weights["dns"], "contribution": round(weights["dns"] * dns_score * 100, 1)},
         {"factor": "Hosting Risk", "key": "hosting", "raw": round(hosting_score, 3), "weight": weights["hosting"], "contribution": round(weights["hosting"] * hosting_score * 100, 1)},
         {"factor": "Vector Similarity", "key": "vectorSimilarity", "raw": round(max_similarity, 3), "weight": weights["vectorSimilarity"], "contribution": round(weights["vectorSimilarity"] * max_similarity * 100, 1)},
+        {"factor": "Atlas Search Relevance", "key": "atlasSearch", "raw": round(max_atlas_score / 10.0, 3), "weight": weights.get("atlasSearch", 0), "contribution": round(weights.get("atlasSearch", 0) * min(max_atlas_score / 10.0, 1.0) * 100, 1), "atlasMatches": atlas_match_count},
         {"factor": "DGA Score", "key": "dgaScore", "raw": round(dga_risk, 3), "weight": weights["dgaScore"], "contribution": round(weights["dgaScore"] * dga_risk * 100, 1)},
         {"factor": "Structural Bypass", "key": "structuralScore", "raw": round(structural_risk, 3), "weight": weights["structuralScore"], "contribution": round(weights["structuralScore"] * structural_risk * 100, 1)},
         {"factor": "Homoglyph", "key": "homoglyphScore", "raw": round(homoglyph_risk, 3), "weight": weights.get("homoglyphScore", 0), "contribution": round(weights.get("homoglyphScore", 0) * homoglyph_risk * 100, 1)},
@@ -550,7 +693,15 @@ def calculate_risk_score(
     keyword_points = round(keyword_bonus * 100, 1)
     risk += keyword_points
     if keyword_points > 0:
-        factors.append({"factor": "Phishing Keywords", "key": "keywordBonus", "raw": round(keyword_bonus, 3), "weight": 1.0, "contribution": keyword_points})
+        factors.append({
+            "factor": "Phishing Keywords",
+            "key": "keywordBonus",
+            "raw": round(keyword_bonus, 3),
+            "weight": 1.0,
+            "contribution": keyword_points,
+            "exactMatches": kw_matches["exact"],
+            "fuzzyMatches": kw_matches["fuzzy"],
+        })
 
     # ── Vector Intel Boost ───────────────────────────────────────────
     # When the scanned URL matches threat intel entries with high cosine
@@ -577,6 +728,27 @@ def calculate_risk_score(
             "weight": 1.0,
             "contribution": intel_boost,
             "intelMatches": intel_match_count,
+        })
+
+    # Atlas lexical boost (lighter than vector-intel boost)
+    atlas_boost = 0.0
+    if atlas_match_count > 0 and max_atlas_score >= 6.0:
+        if max_atlas_score >= 8.5:
+            atlas_boost = 5.0 + min(atlas_match_count - 1, 4) * 0.8
+        elif max_atlas_score >= 7.5:
+            atlas_boost = 3.5 + min(atlas_match_count - 1, 4) * 0.7
+        else:
+            atlas_boost = 2.0 + min(atlas_match_count - 1, 4) * 0.5
+    atlas_boost = round(atlas_boost, 1)
+    if atlas_boost > 0:
+        risk += atlas_boost
+        factors.append({
+            "factor": "Atlas Search Boost",
+            "key": "atlasSearchBoost",
+            "raw": round(max_atlas_score / 10.0, 3),
+            "weight": 1.0,
+            "contribution": atlas_boost,
+            "atlasMatches": atlas_match_count,
         })
 
     # Hard floor: confirmed homoglyph impersonation of a known domain
