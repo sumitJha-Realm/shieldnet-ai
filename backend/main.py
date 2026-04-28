@@ -35,10 +35,14 @@ async def lifespan(app: FastAPI):
     logger.info("ShieldNet AI backend starting up...")
     db = get_database()
     logger.info("Connected to database: %s", db.name)
-    await get_url_graph_service().ensure_indexes()
-    logger.info("Graph indexes ensured")
-    await get_campaign_repository().ensure_indexes()
-    logger.info("Campaign indexes ensured")
+    skip_startup_indexes = os.getenv("SKIP_STARTUP_INDEXES", "").lower() in {"1", "true", "yes"}
+    if skip_startup_indexes:
+        logger.info("Skipping startup index initialization")
+    else:
+        await get_url_graph_service().ensure_indexes()
+        logger.info("Graph indexes ensured")
+        await get_campaign_repository().ensure_indexes()
+        logger.info("Campaign indexes ensured")
     yield
     # Shutdown
     await close_mongo_client()
