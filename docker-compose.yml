@@ -2,7 +2,10 @@ version: '3.8'
 
 services:
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://backend:8000
     ports:
       - "3000:3000"
     environment:

@@ -4,13 +4,14 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 
 const NAV_ITEMS = [
+  { href: '/summary', label: 'Summary', icon: '🧭' },
   { href: '/', label: 'Dashboard', icon: '📊' },
   { href: '/scan', label: 'URL Scanner', icon: '🔍' },
-  { href: '/architecture', label: 'Architecture', icon: '🏗️' },
   { href: '/threats', label: 'Threat Database', icon: '⚠️' },
   { href: '/search', label: 'Search Playground', icon: '🧪' },
   { href: '/analytics', label: 'Analytics', icon: '📈' },
   { href: '/settings', label: 'Settings', icon: '⚙️' },
+  { href: '/architecture', label: 'Architecture', icon: '🏗️' },
 ];
 
 export default function Sidebar() {

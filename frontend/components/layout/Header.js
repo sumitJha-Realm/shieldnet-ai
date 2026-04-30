@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 
 const PAGE_TITLES = {
   '/': 'Dashboard',
+  '/summary': 'Solution Summary',
   '/scan': 'URL Scanner',
   '/threats': 'Threat Database',
   '/search': 'Search Playground',

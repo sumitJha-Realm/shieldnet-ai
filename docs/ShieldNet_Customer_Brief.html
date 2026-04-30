@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ShieldNet AI Customer Brief</title>
+  <style>
+    body { font-family: Helvetica, Arial, sans-serif; color: #1a1c1e; margin: 36px; line-height: 1.45; }
+    h1, h2, h3 { color: #001e2b; margin-bottom: 8px; }
+    h1 { border-bottom: 2px solid #00ed64; padding-bottom: 8px; }
+    table { border-collapse: collapse; width: 100%; margin: 10px 0 18px; font-size: 12px; }
+    th, td { border: 1px solid #d6dcda; padding: 8px; vertical-align: top; text-align: left; }
+    th { background: #f5f6f7; }
+    code, pre { font-family: Menlo, Monaco, Consolas, monospace; font-size: 11px; }
+    pre { background: #f7f9f8; border: 1px solid #d6dcda; padding: 10px; border-radius: 6px; white-space: pre-wrap; }
+    .note { background: #fff8ef; border: 1px solid #f1c38b; padding: 10px; border-radius: 6px; font-size: 12px; }
+    .small { font-size: 12px; color: #3d4f58; }
+    ul { margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <h1>ShieldNet AI: Customer Solution Brief</h1>
+  <p class="small">Version: April 2026</p>
+
+  <h2>1. Executive Summary</h2>
+  <p>
+    ShieldNet AI is a real-time malicious URL detection platform that combines deterministic threat analysis,
+    semantic vector retrieval, Atlas text search, and optional Foundry-based agentic reasoning.
+    It helps security teams triage suspicious URLs faster with explainable evidence and campaign-level context.
+  </p>
+
+  <div class="note">
+    <strong>Important:</strong> This environment is a validation/demo implementation. Detection outcomes and campaign links
+    depend on seeded data quality and should be calibrated before production rollout.
+  </div>
+
+  <h2>2. Business Value</h2>
+  <ul>
+    <li>Accelerates URL triage with automated risk scoring and explainable evidence.</li>
+    <li>Improves detection quality using both lexical search and semantic similarity.</li>
+    <li>Supports campaign intelligence by clustering related malicious URLs.</li>
+    <li>Enables analyst workflows through searchable threat database and status management.</li>
+  </ul>
+
+  <h2>3. High-Level Architecture</h2>
+  <table>
+    <tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr>
+    <tr><td>Frontend</td><td>Next.js 15, React 18</td><td>Dashboard, scanner UI, threat explorer, architecture and analytics views.</td></tr>
+    <tr><td>Backend API</td><td>FastAPI, Uvicorn, Pydantic</td><td>URL scan orchestration, search endpoints, campaign and rules management.</td></tr>
+    <tr><td>Data</td><td>MongoDB Atlas</td><td>Stores URL records, campaigns, graph edges, scan rules, and threat logs.</td></tr>
+    <tr><td>Search</td><td>Atlas Search + Vector Search + Rank Fusion</td><td>Lexical retrieval, semantic retrieval, and hybrid ranking.</td></tr>
+    <tr><td>Embeddings</td><td>Voyage API (voyage-4 default)</td><td>Generates 1024-dim vectors from summary text for semantic similarity.</td></tr>
+    <tr><td>Optional Agentic</td><td>Microsoft Foundry (gpt-5.4 default)</td><td>Classifier reasoning layer over deterministic pipeline evidence.</td></tr>
+  </table>
+
+  <h2>4. Core Functional Modules</h2>
+  <table>
+    <tr><th>Module</th><th>What It Does</th></tr>
+    <tr><td>URL Scanner</td><td>Extracts URL signals, computes risk score, finds similar threats, returns verdict + evidence.</td></tr>
+    <tr><td>Threat Database</td><td>Searches and filters stored URLs with operational status and campaign linkage.</td></tr>
+    <tr><td>Search Playground</td><td>Demonstrates Atlas, Vector, and Hybrid retrieval behavior side-by-side.</td></tr>
+    <tr><td>Campaign Detection</td><td>Clusters related threats and updates campaign metrics and URL tags.</td></tr>
+    <tr><td>Rules Management</td><td>Stores active threshold/weight rules used by scanner policy decisions.</td></tr>
+    <tr><td>URL Graph</td><td>Maintains relationship edges between similar URLs for graph traversal.</td></tr>
+  </table>
+
+  <h2>5. Data Sources and Ingestion</h2>
+  <ul>
+    <li><strong>Live scan ingestion:</strong> Each scan request creates or updates a URL record in <code>urls</code>.</li>
+    <li><strong>Threat intel seeding:</strong> Threat feed-style records are stored in <code>urls</code> with <code>docType=threat_intel</code>.</li>
+    <li><strong>Campaign updates:</strong> Detected clusters create/update documents in <code>campaigns</code>.</li>
+    <li><strong>Graph edges:</strong> Similarity relations are written into <code>url_edges</code>.</li>
+    <li><strong>Operational rules:</strong> Active configuration is maintained in <code>scan_rules</code>.</li>
+  </ul>
+
+  <h2>6. Sample Collection Schemas</h2>
+
+  <h3>6.1 urls (primary unified collection)</h3>
+  <pre>{
+  "_id": "6631f0f0a7c3b12ab4e9d101",
+  "url": "https://secure-login-incometax.xyz/auth/verify",
+  "domain": "secure-login-incometax.xyz",
+  "canonicalDomain": "incometax.gov.in",
+  "docType": "scan",
+  "threatClassification": "phishing",
+  "riskScore": 86.4,
+  "status": "blocked",
+  "summaryText": "Credential harvest style URL impersonating tax portal...",
+  "embedding": ["1024-dim vector"],
+  "payloadTypes": ["credential_harvest", "open_redirect"],
+  "campaignId": "campaign_001_tax_auth_2025",
+  "scanCount": 3,
+  "firstSeenAt": "2026-04-27T08:51:00Z",
+  "lastSeenAt": "2026-04-30T11:08:12Z"
+}</pre>
+
+  <h3>6.2 urls (threat-intel record in same collection)</h3>
+  <pre>{
+  "url": "https://nic.in/login?redirect=http://gov-login-verify.xyz/capture",
+  "domain": "nic.in",
+  "docType": "threat_intel",
+  "threatClassification": "phishing",
+  "attackCategory": "open_redirect",
+  "feedName": "CERT-IN_Feed",
+  "summaryText": "Open redirect attack against nic.in ...",
+  "embedding": ["1024-dim vector"]
+}</pre>
+
+  <h3>6.3 campaigns</h3>
+  <pre>{
+  "_id": "6631f26aa7c3b12ab4e9d2a2",
+  "campaignId": "campaign_001_tax_auth_2025",
+  "name": "Tax Authority Phishing Campaign Q1 2025",
+  "attackCategory": "credential_harvest",
+  "status": "active",
+  "urlCount": 128,
+  "avgRiskScore": 83.7,
+  "domains": ["incometax.gov.in", "gst.gov.in"],
+  "lastSeen": "2026-04-30T10:21:00Z"
+}</pre>
+
+  <h3>6.4 url_edges</h3>
+  <pre>{
+  "fromUrl": "https://secure-login-incometax.xyz/auth/verify",
+  "toUrl": "https://gst-auth-update.top/kyc/verify",
+  "strength": 0.79,
+  "factors": [
+    { "name": "vector_similarity", "value": 0.84 },
+    { "name": "shared_attack_category", "value": 0.74 }
+  ]
+}</pre>
+
+  <h3>6.5 scan_rules</h3>
+  <pre>{
+  "_id": "active_rules",
+  "thresholds": { "block": 70, "review": 45 },
+  "weights": { "vector": 0.30, "payload": 0.20, "dga": 0.20 }
+}</pre>
+
+  <h2>7. Embedding Strategy</h2>
+  <ul>
+    <li>Embeddings are generated from <strong>summaryText</strong> (URL + metadata + threat signals), not raw URL alone.</li>
+    <li>Model default: <strong>voyage-4</strong>, output dimension: <strong>1024</strong>, similarity: <strong>cosine</strong>.</li>
+    <li>Campaign-aware re-embedding updates vectors after campaign tagging to improve future retrieval precision.</li>
+    <li>Unified retrieval: scanner and threat-intel documents share the same embedding field in one collection.</li>
+  </ul>
+
+  <h2>8. Search and Detection Pipeline</h2>
+  <ol>
+    <li>Receive URL and perform waterfall retrieval checks (cache/DB).</li>
+    <li>Extract deterministic threat signals (payload, structure, DGA, homoglyph, etc.).</li>
+    <li>Build summary text and generate embedding.</li>
+    <li>Run vector search for semantic neighbors and optional lexical/hybrid retrieval.</li>
+    <li>Compute weighted risk and classification.</li>
+    <li>Detect and attach campaign context (if matched).</li>
+    <li>Persist updated record and return explainable result.</li>
+  </ol>
+
+  <h2>9. Security and Governance Notes</h2>
+  <ul>
+    <li>No hardcoded secrets should be committed; use environment variables and secret stores.</li>
+    <li>Threat decisions should be calibrated with production data and analyst feedback loops.</li>
+    <li>Use role-based access for scan rules and status override operations.</li>
+  </ul>
+
+  <h2>10. Deployment Summary</h2>
+  <ul>
+    <li>Local and demo deployment via Docker Compose.</li>
+    <li>Frontend and backend can be split for managed hosting.</li>
+    <li>MongoDB Atlas hosts data/search/vector indexes.</li>
+  </ul>
+
+  <p class="small">Prepared for customer sharing. This brief can be customized with your branding, SLAs, and implementation roadmap.</p>
+</body>
+</html>

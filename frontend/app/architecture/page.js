@@ -92,10 +92,12 @@ export default function ArchitecturePage() {
   const [flowMode, setFlowMode] = useState('high');
 
   const viewTitle = useMemo(() => {
-    if (activeView === 'agentic') return 'Multi-Agent Architecture';
-    if (activeView === 'comparison') return 'Pipeline vs Multi-Agent Comparison';
+    if (activeView === 'agentic') return 'Agentic Architecture';
+    if (activeView === 'comparison') return 'Pipeline vs Agentic Comparison';
     if (activeView === 'flow') return 'Scanner Flow Diagram';
     if (activeView === 'search-features') return 'Atlas Search + Vector Search Features';
+    if (activeView === 'collections') return 'Collections, Sample Data, and Embedding Strategy';
+    if (activeView === 'stack') return 'Tech Stack, Models, and Module Purposes';
     return 'Pipeline Mode Architecture';
   }, [activeView]);
 
@@ -146,7 +148,7 @@ export default function ArchitecturePage() {
           <h2 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>ShieldNet Architecture Views</h2>
         </div>
         <div style={{ fontSize: 14, lineHeight: 1.6, opacity: 0.95, maxWidth: 960 }}>
-          This page shows both analysis architectures used by the scanner: Pipeline mode for deterministic scoring, and Multi-Agent mode where a 3-agent chain (Triage → Classifier → Action) powered by Microsoft Foundry reasons over pipeline evidence.
+          This page shows both analysis architectures used by the scanner: Pipeline mode for deterministic scoring, and Agentic mode where Microsoft Foundry reasons over pipeline evidence. The current default uses one classifier agent, while multi-agent chains can be enabled for more agentic workflows.
         </div>
       </div>
 
@@ -154,10 +156,12 @@ export default function ArchitecturePage() {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
           {[
             { key: 'pipeline', label: 'Pipeline Architecture' },
-            { key: 'agentic', label: 'Multi-Agent Architecture' },
+            { key: 'agentic', label: 'Agentic Architecture' },
             { key: 'comparison', label: 'Compare Both' },
             { key: 'flow', label: 'Scanner Flow Diagram' },
             { key: 'search-features', label: 'Search Features Used' },
+            { key: 'collections', label: 'Collections & Data Flow' },
+            { key: 'stack', label: 'Tech Stack & Models' },
           ].map((item) => {
             const active = activeView === item.key;
             return (
@@ -253,7 +257,7 @@ export default function ArchitecturePage() {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0 0', padding: '8px 12px', background: '#F5F6F7', borderRadius: 8, fontSize: 12, color: '#3D4F58' }}>
               <span style={{ fontSize: 16 }}>→</span>
-              Single-agent mode trades some consensus depth for lower latency and simpler operation.
+              The default single-agent mode keeps latency and operations simpler; configurable multi-agent chains can be used when you want more agentic orchestration.
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
@@ -267,9 +271,9 @@ export default function ArchitecturePage() {
               Runtime Reliability Notes
             </div>
             <div style={{ display: 'grid', gap: 8, fontSize: 13, color: '#1a1c1e' }}>
-              <div><strong>Agent chain:</strong> Configurable via <code>AGENTIC_AGENT_CHAIN</code> env var (default: classifier). Custom prompts via <code>AGENTIC_AGENT_PROMPTS_JSON</code>.</div>
+              <div><strong>Agent chain:</strong> Configurable via <code>AGENTIC_AGENT_CHAIN</code> env var (default: classifier). You can keep the current single-agent mode or compose multiple agents for more agentic workflows. Custom prompts via <code>AGENTIC_AGENT_PROMPTS_JSON</code>.</div>
               <div><strong>Model:</strong> Microsoft Foundry endpoint using <code>gpt-5.4</code> with temperature 0.2 and JSON response format for structured outputs.</div>
-              <div><strong>Client timeout:</strong> 90s safety timeout; single-agent runs should usually complete faster than previous multi-agent mode.</div>
+              <div><strong>Client timeout:</strong> 90s safety timeout; single-agent runs usually complete faster, while multi-agent chains may take longer.</div>
               <div><strong>Failure handling:</strong> If Foundry is unavailable, scanner returns full deterministic pipeline output and surfaces a &quot;Foundry unavailable&quot; panel.</div>
               <div><strong>Debug path:</strong> Validate with <code>/api/v1/scan/agentic</code> and inspect backend logs for Foundry call failures.</div>
             </div>
@@ -283,13 +287,13 @@ export default function ArchitecturePage() {
           <div style={{ display: 'grid', gap: 10 }}>
             {[
               ['Decision style', 'Fixed weighted thresholds', 'Single Foundry-agent decision with bounded score adjustment'],
-              ['Agent count', 'None (deterministic)', '1 agent (classifier)'],
-              ['Latency profile', 'Lower and predictable', 'Higher than pipeline, lower than prior 3-agent chain'],
+              ['Agent count', 'None (deterministic)', 'Default: 1 agent (classifier); optional multi-agent chain'],
+              ['Latency profile', 'Lower and predictable', 'Higher than pipeline; single-agent is faster than multi-agent chains'],
               ['Explainability', 'Formula + rule evidence', 'Agent reasoning steps + decisive signals'],
               ['Failure behavior', 'Always available if backend up', 'Pipeline result returned; Foundry-unavailable state surfaced in UI'],
               ['Request timeout', '30s client timeout', '90s client timeout safety window'],
-              ['Score adjustment', 'N/A (formula only)', 'Single Foundry agent applies -15 to +15 adjustment to pipeline baseline'],
-              ['Best use', 'Strict policy enforcement', 'Analyst assist, second-opinion, and explainable verdicts'],
+              ['Score adjustment', 'N/A (formula only)', 'Current classifier agent applies -15 to +15 adjustment to pipeline baseline'],
+              ['Best use', 'Strict policy enforcement', 'Analyst assist, second-opinion, and explainable verdicts; multi-agent chains fit deeper agentic workflows'],
             ].map(([k, p, a]) => (
               <div
                 key={k}
@@ -593,6 +597,273 @@ export default function ArchitecturePage() {
                 <div key={feature} style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 12, background: '#F9FAFB', border: '1px solid #E8EDEB', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
                   <div style={{ fontWeight: 700, color: '#3D4F58' }}>{feature}</div>
                   <div style={{ color: '#1a1c1e', fontFamily: 'monospace' }}>{file}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeView === 'collections' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div style={card}>
+            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, color: '#1a1c1e' }}>
+              Collection Usage Map
+            </h3>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {[
+                ['urls', 'Primary unified store for scanner records + threat intel docs', 'Source: URL Scanner API, reset/seed scripts, threat-intel seed script'],
+                ['campaigns', 'Clustered attack campaigns and aggregate stats (urlCount, avgRiskScore, lastSeen)', 'Source: campaign detection service during scan and seeding scripts'],
+                ['url_edges', 'Graph relationships between related URLs for traversal/connected evidence', 'Source: URL graph service after scan similarity results'],
+                ['scan_rules', 'Active threshold weights, module toggles, and policy defaults', 'Source: default rules on first run + scan rules admin routes'],
+                ['threat_logs', 'Operational/audit log history for analytics and review timelines', 'Source: seed/demo scripts and threat management flows'],
+              ].map(([name, purpose, source]) => (
+                <div key={name} style={{ display: 'grid', gridTemplateColumns: '150px 1fr 1fr', gap: 12, background: '#F9FAFB', border: '1px solid #E8EDEB', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
+                  <div style={{ fontWeight: 800, color: '#1a1c1e', fontFamily: 'monospace' }}>{name}</div>
+                  <div style={{ color: '#3D4F58' }}>{purpose}</div>
+                  <div style={{ color: '#3D4F58' }}>{source}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={card}>
+            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, color: '#1a1c1e' }}>
+              Sample Data By Collection
+            </h3>
+            <div style={{ display: 'grid', gap: 14 }}>
+              <div style={{ border: '1px solid #E8EDEB', borderRadius: 10, padding: 12, background: '#FBFDFF' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#1a1c1e' }}>urls (scanner record)</div>
+                <pre style={{ margin: 0, fontSize: 12, color: '#12344D', whiteSpace: 'pre-wrap' }}>{`{
+  "url": "https://secure-login-incometax.xyz/auth/verify",
+  "domain": "secure-login-incometax.xyz",
+  "docType": "scan",
+  "threatClassification": "phishing",
+  "riskScore": 86.4,
+  "status": "blocked",
+  "summaryText": "URL analysis ... threat classification phishing ...",
+  "embedding": [/* 1024-dim voyage-4 vector */],
+  "campaignId": "campaign_001_tax_auth_2025",
+  "campaignName": "Tax Authority Phishing Campaign Q1 2025"
+}`}</pre>
+              </div>
+
+              <div style={{ border: '1px solid #E8EDEB', borderRadius: 10, padding: 12, background: '#FCFAFF' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#1a1c1e' }}>urls (threat intel doc in same collection)</div>
+                <pre style={{ margin: 0, fontSize: 12, color: '#4B2B91', whiteSpace: 'pre-wrap' }}>{`{
+  "url": "https://nic.in/login?redirect=http://gov-login-verify.xyz/capture",
+  "domain": "nic.in",
+  "docType": "threat_intel",
+  "threatClassification": "phishing",
+  "attackCategory": "open_redirect",
+  "feedName": "CERT-IN_Feed",
+  "summaryText": "Open redirect attack against nic.in ...",
+  "embedding": [/* 1024-dim voyage-4 vector */]
+}`}</pre>
+              </div>
+
+              <div style={{ border: '1px solid #E8EDEB', borderRadius: 10, padding: 12, background: '#F6FBF8' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#1a1c1e' }}>campaigns</div>
+                <pre style={{ margin: 0, fontSize: 12, color: '#1C6A43', whiteSpace: 'pre-wrap' }}>{`{
+  "campaignId": "campaign_001_tax_auth_2025",
+  "name": "Tax Authority Phishing Campaign Q1 2025",
+  "attackCategory": "credential_harvest",
+  "status": "active",
+  "urlCount": 128,
+  "avgRiskScore": 83.7,
+  "domains": ["incometax.gov.in", "gst.gov.in"],
+  "lastSeen": "2026-04-30T10:21:00Z"
+}`}</pre>
+              </div>
+
+              <div style={{ border: '1px solid #E8EDEB', borderRadius: 10, padding: 12, background: '#FFF9F1' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#1a1c1e' }}>url_edges</div>
+                <pre style={{ margin: 0, fontSize: 12, color: '#6B4E13', whiteSpace: 'pre-wrap' }}>{`{
+  "fromUrl": "https://secure-login-incometax.xyz/auth/verify",
+  "toUrl": "https://gst-auth-update.top/kyc/verify",
+  "strength": 0.79,
+  "factors": [
+    { "name": "vector_similarity", "value": 0.84 },
+    { "name": "shared_attack_category", "value": 0.74 }
+  ]
+}`}</pre>
+              </div>
+
+              <div style={{ border: '1px solid #E8EDEB', borderRadius: 10, padding: 12, background: '#F5F6F7' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#1a1c1e' }}>scan_rules / threat_logs</div>
+                <pre style={{ margin: 0, fontSize: 12, color: '#3D4F58', whiteSpace: 'pre-wrap' }}>{`// scan_rules (singleton)
+{
+  "_id": "active_rules",
+  "thresholds": { "block": 70, "review": 45 },
+  "weights": { "vector": 0.30, "payload": 0.20, "dga": 0.20 }
+}
+
+// threat_logs (audit)
+{
+  "urlId": "...",
+  "timestamp": "2026-04-30T10:23:00Z",
+  "action": "blocked",
+  "scanTier": "L3_FULL_PIPELINE",
+  "aiConfidence": 0.94,
+  "riskScore": 86.4
+}`}</pre>
+              </div>
+            </div>
+          </div>
+
+          <div style={card}>
+            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, color: '#1a1c1e' }}>
+              Data Ingestion Source and Purpose Flow
+            </h3>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {[
+                ['URL Scanner request', 'Incoming URL is enriched, scored, embedded, and upserted into urls as docType=scan.'],
+                ['Threat intel seeding', 'Threat feed-style records are generated and stored in urls as docType=threat_intel for shared search/vector retrieval.'],
+                ['Campaign detection', 'Vector neighbors + attack category + time-window logic create/update campaigns and tag matched URLs.'],
+                ['Graph linking', 'Similarity evidence creates url_edges so related threats can be traversed as a connected graph.'],
+                ['Rules and audit', 'scan_rules controls scoring behavior; threat_logs keeps operational action history for review.'],
+              ].map(([title, detail]) => (
+                <div key={title} style={{ background: '#F5F6F7', border: '1px solid #E8EDEB', borderRadius: 10, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1c1e', marginBottom: 4 }}>{title}</div>
+                  <div style={{ fontSize: 13, color: '#3D4F58', lineHeight: 1.5 }}>{detail}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={card}>
+            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, color: '#1a1c1e' }}>
+              Embedding Strategy Used In This Solution
+            </h3>
+            <div style={{ display: 'grid', gap: 10, fontSize: 13, color: '#3D4F58', lineHeight: 1.55 }}>
+              <div>
+                <strong style={{ color: '#1a1c1e' }}>Base embedding input:</strong> Scanner builds <strong>summaryText</strong> from URL metadata + threat signals (domain age, DNS/hosting flags, structural risk, DGA/homoglyph signals, classification, risk score, payload types).
+              </div>
+              <div>
+                <strong style={{ color: '#1a1c1e' }}>Model/runtime:</strong> Voyage API at <strong>ai.mongodb.com/v1/embeddings</strong> using <strong>voyage-4</strong>, producing a <strong>1024-dim</strong> vector stored in <strong>embedding</strong>.
+              </div>
+              <div>
+                <strong style={{ color: '#1a1c1e' }}>Unified retrieval design:</strong> Both scan docs and threat-intel docs live in <strong>urls</strong> and share the same embedding field, enabling one vector query to retrieve both types.
+              </div>
+              <div>
+                <strong style={{ color: '#1a1c1e' }}>Campaign re-embedding:</strong> After campaign detection, summaryText is rewritten with campaign context and re-embedded so future scans can resolve campaign semantics in a single query.
+              </div>
+              <div>
+                <strong style={{ color: '#1a1c1e' }}>Why summary-based vectors:</strong> Embedding a compact natural-language summary of URL + metadata performs better than embedding only raw URL text for semantic threat similarity.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeView === 'stack' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div style={card}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+              <h3 style={{ margin: 0, fontSize: 18, color: '#1a1c1e' }}>AI Models, Search Indexes, and Runtime Defaults</h3>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <FeaturePill>Voyage Embeddings</FeaturePill>
+                <FeaturePill bg="#F3EEFF" color="#4B2B91">Foundry LLM</FeaturePill>
+                <FeaturePill bg="#E3FCF7" color="#0F5132">Atlas Search Stack</FeaturePill>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gap: 10 }}>
+              {[
+                ['Embedding model (runtime default)', 'voyage-4', 'Used by embedding service for URL and summary vectors.'],
+                ['Embedding endpoint', 'https://ai.mongodb.com/v1/embeddings', 'Called with VOYAGE_AI_API_KEY for single and batch embedding generation.'],
+                ['LLM model (runtime default)', 'gpt-5.4', 'Used in Foundry-backed agentic step to produce decision, confidence, reasoning, and score adjustment.'],
+                ['LLM endpoint', 'GROVE_FOUNDRY_CHAT_URL', 'Foundry chat completions endpoint for classifier workflow.'],
+                ['Atlas Search index', 'url_search_index', 'Lexical and fuzzy retrieval on url, domain, and summaryText.'],
+                ['Vector Search index', 'url_vector_index', 'Semantic nearest-neighbor retrieval on embedding vectors.'],
+                ['Hybrid retrieval', '$rankFusion', 'Weighted fusion of Atlas lexical and Vector semantic results.'],
+                ['Vector dimensions / similarity', '1024 / cosine', 'Configured for semantic URL similarity retrieval in Atlas vector index.'],
+              ].map(([name, value, purpose]) => (
+                <div key={name} style={{ display: 'grid', gridTemplateColumns: '240px 180px 1fr', gap: 12, background: '#F9FAFB', border: '1px solid #E8EDEB', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
+                  <div style={{ fontWeight: 700, color: '#3D4F58' }}>{name}</div>
+                  <div style={{ color: '#1a1c1e', fontFamily: 'monospace' }}>{value}</div>
+                  <div style={{ color: '#3D4F58' }}>{purpose}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={card}>
+            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 17, color: '#1a1c1e' }}>Frontend Module Stack</h3>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {[
+                ['App framework', 'Next.js 15 + React 18', 'Page routing, SSR/CSR composition, and app shell for analyst workflows.'],
+                ['UI system', 'MongoDB LeafyGreen UI packages', 'Consistent enterprise components for tables, cards, forms, tabs, and notifications.'],
+                ['Charts', 'Recharts', 'Risk breakdown, trend charts, and dashboard visualization panels.'],
+                ['API client', 'Axios', 'Browser-side calls to backend /api/v1 routes.'],
+                ['Linting', 'ESLint + eslint-config-next', 'Code quality and static checks in frontend module.'],
+              ].map(([name, stack, purpose]) => (
+                <div key={name} style={{ display: 'grid', gridTemplateColumns: '180px 250px 1fr', gap: 12, background: '#F5F6F7', border: '1px solid #E8EDEB', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
+                  <div style={{ fontWeight: 700, color: '#3D4F58' }}>{name}</div>
+                  <div style={{ color: '#1a1c1e', fontFamily: 'monospace' }}>{stack}</div>
+                  <div style={{ color: '#3D4F58' }}>{purpose}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={card}>
+            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 17, color: '#1a1c1e' }}>Backend Module Stack</h3>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {[
+                ['API layer', 'FastAPI + Uvicorn + Pydantic', 'Defines REST endpoints, request validation, response typing, and ASGI runtime.'],
+                ['Data layer', 'Motor (async MongoDB driver)', 'Repository pattern CRUD, aggregations, and index-aware querying.'],
+                ['Config layer', 'python-dotenv + env vars', 'Loads runtime secrets and deployment config values.'],
+                ['HTTP integration', 'httpx', 'Calls Voyage embedding API, Foundry LLM endpoint, and external enrichment APIs.'],
+                ['URL scoring logic', 'Custom risk engine + python-Levenshtein', 'Threat scoring, typo-tolerant phishing keyword matching, and classification floors/thresholds.'],
+                ['Enrichment DNS', 'dnspython', 'A/AAAA/CNAME/MX/NS/TXT lookups, DNSSEC check, reverse DNS.'],
+                ['Enrichment WHOIS', 'python-whois', 'Domain age, registrar, privacy hints, expiry windows.'],
+                ['Enrichment TLS', 'ssl + socket', 'Certificate type, issuer, domain-match, recency, and expiry risk signals.'],
+                ['Testing', 'pytest + pytest-asyncio', 'Unit tests and async behavior validation in backend modules.'],
+              ].map(([name, stack, purpose]) => (
+                <div key={name} style={{ display: 'grid', gridTemplateColumns: '180px 250px 1fr', gap: 12, background: '#F5F6F7', border: '1px solid #E8EDEB', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
+                  <div style={{ fontWeight: 700, color: '#3D4F58' }}>{name}</div>
+                  <div style={{ color: '#1a1c1e', fontFamily: 'monospace' }}>{stack}</div>
+                  <div style={{ color: '#3D4F58' }}>{purpose}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={card}>
+            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 17, color: '#1a1c1e' }}>Search + AI Module Purpose Map</h3>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {[
+                ['Atlas Search service', 'Lexical search, fuzzy typo tolerance, highlights, filters, and facets for analyst drill-down.'],
+                ['Vector Search service', 'Embedding-based semantic retrieval of similar malicious URLs and threat-intel neighbors.'],
+                ['Hybrid Search service', 'Combines Atlas and Vector pipelines through weighted $rankFusion scoring.'],
+                ['Unified Search service', 'Orchestrates atlas/vector/hybrid calls and powers search demo scenarios.'],
+                ['Embedding service', 'Creates single/batch embeddings for scan context and record enrichment.'],
+                ['Agentic analysis service', 'Runs Foundry classifier workflow to add decision confidence and bounded score adjustment.'],
+                ['Campaign detection service', 'Clusters related malicious URLs and links them into campaign-level intelligence.'],
+                ['Campaign re-embedding flow', 'Regenerates vectors with campaign context so future semantic retrieval is stronger.'],
+              ].map(([moduleName, purpose]) => (
+                <div key={moduleName} style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 12, background: '#F9FAFB', border: '1px solid #E8EDEB', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
+                  <div style={{ fontWeight: 700, color: '#3D4F58' }}>{moduleName}</div>
+                  <div style={{ color: '#3D4F58', lineHeight: 1.5 }}>{purpose}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={card}>
+            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 17, color: '#1a1c1e' }}>Infrastructure and Delivery Stack</h3>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {[
+                ['Container runtime', 'Docker + Docker Compose', 'Runs frontend and backend locally as coordinated services.'],
+                ['Backend packaging', 'Poetry', 'Dependency management and script execution for Python backend.'],
+                ['Frontend packaging', 'npm', 'Dependency management and Next.js build/start tasks.'],
+                ['Database platform', 'MongoDB Atlas', 'Persists URL records, threat intelligence, campaigns, and search/vector indexes.'],
+              ].map(([name, stack, purpose]) => (
+                <div key={name} style={{ display: 'grid', gridTemplateColumns: '180px 250px 1fr', gap: 12, background: '#F5F6F7', border: '1px solid #E8EDEB', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
+                  <div style={{ fontWeight: 700, color: '#3D4F58' }}>{name}</div>
+                  <div style={{ color: '#1a1c1e', fontFamily: 'monospace' }}>{stack}</div>
+                  <div style={{ color: '#3D4F58' }}>{purpose}</div>
                 </div>
               ))}
             </div>
