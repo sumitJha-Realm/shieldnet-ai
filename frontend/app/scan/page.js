@@ -414,6 +414,35 @@ export default function ScanPage() {
   const [inputPageContent, setInputPageContent] = useState('');
   const [lastSubmittedPayload, setLastSubmittedPayload] = useState(null);
 
+  const getScanErrorMessage = (err) => {
+    const detail = err?.response?.data?.detail;
+
+    if (typeof detail === 'string' && detail.trim()) {
+      return detail;
+    }
+
+    if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0];
+      if (typeof first === 'string' && first.trim()) {
+        return first;
+      }
+      if (first?.msg) {
+        return `Validation error: ${first.msg}`;
+      }
+      return 'Validation error in scan request payload.';
+    }
+
+    if (err?.code === 'ECONNABORTED') {
+      return 'Scan timed out while waiting for backend response. Please retry.';
+    }
+
+    if (!err?.response) {
+      return 'Cannot reach backend at /api/v1/scan. Ensure backend is running on port 8000 and frontend proxy is active.';
+    }
+
+    return 'Scan failed due to a backend error. Please retry in a moment.';
+  };
+
   const handleScan = async (input) => {
     const payload = typeof input === 'string' ? { url: input, pageContent: '' } : input;
     if (!payload?.url) return;
@@ -426,7 +455,7 @@ export default function ScanPage() {
       const res = scanMode === 'agentic' ? await scanAgenticURL(payload) : await scanURL(payload);
       setResult(res.data);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Scan failed. Ensure the backend is running.');
+      setError(getScanErrorMessage(err));
     } finally {
       setLoading(false);
     }

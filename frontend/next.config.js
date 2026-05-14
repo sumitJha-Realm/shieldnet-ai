@@ -1,5 +1,11 @@
 const path = require('path');
 
+function normalizeBackendUrl(rawUrl) {
+  const fallback = 'http://localhost:8000';
+  const value = (rawUrl || fallback).trim().replace(/\/$/, '');
+  return value.replace(/\/api(?:\/v1)?$/, '');
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -27,7 +33,7 @@ const nextConfig = {
     '@leafygreen-ui/toast',
   ],
   async rewrites() {
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const backendUrl = normalizeBackendUrl(process.env.NEXT_PUBLIC_API_URL);
     return [
       {
         source: '/api/:path*',
