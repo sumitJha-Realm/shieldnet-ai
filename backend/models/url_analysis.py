@@ -122,6 +122,7 @@ class ThreatIntelFeed(BaseModel):
 
 class URLScanRequest(BaseModel):
     url: str
+    pageContent: str = ""
 
 
 class URLScanResponse(BaseModel):

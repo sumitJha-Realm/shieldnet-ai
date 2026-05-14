@@ -1,0 +1,184 @@
+{
+  "indexes": [
+    {
+      "name": "vs_threat_signals",
+      "type": "vectorSearch",
+      "collection": "threat_signals",
+      "definition": {
+        "fields": [
+          {
+            "type": "vector",
+            "path": "embedding",
+            "numDimensions": 1024,
+            "similarity": "cosine"
+          },
+          {
+            "type": "filter",
+            "path": "attackCategory"
+          },
+          {
+            "type": "filter",
+            "path": "threatClassification"
+          },
+          {
+            "type": "filter",
+            "path": "source"
+          }
+        ]
+      }
+    },
+    {
+      "name": "vs_regional",
+      "type": "vectorSearch",
+      "collection": "regional_threats",
+      "definition": {
+        "fields": [
+          {
+            "type": "vector",
+            "path": "embedding",
+            "numDimensions": 1024,
+            "similarity": "cosine"
+          },
+          {
+            "type": "filter",
+            "path": "language"
+          },
+          {
+            "type": "filter",
+            "path": "region"
+          }
+        ]
+      }
+    },
+    {
+      "name": "vs_visual",
+      "type": "vectorSearch",
+      "collection": "visual_intelligence",
+      "definition": {
+        "fields": [
+          {
+            "type": "vector",
+            "path": "embedding",
+            "numDimensions": 1024,
+            "similarity": "cosine"
+          },
+          {
+            "type": "filter",
+            "path": "type"
+          },
+          {
+            "type": "filter",
+            "path": "brandName"
+          }
+        ]
+      }
+    },
+    {
+      "name": "infra_search_index",
+      "type": "search",
+      "collection": "infrastructure_intel",
+      "definition": {
+        "mappings": {
+          "dynamic": false,
+          "fields": {
+            "domain": {
+              "type": "string",
+              "analyzer": "lucene.standard"
+            },
+            "asn": {
+              "type": "string",
+              "analyzer": "lucene.keyword"
+            },
+            "asnName": {
+              "type": "string",
+              "analyzer": "lucene.standard"
+            },
+            "hostingProvider": {
+              "type": "string",
+              "analyzer": "lucene.standard"
+            },
+            "status": {
+              "type": "string",
+              "analyzer": "lucene.keyword"
+            },
+            "tlsIssuer": {
+              "type": "string",
+              "analyzer": "lucene.standard"
+            },
+            "geoCountry": {
+              "type": "string",
+              "analyzer": "lucene.keyword"
+            },
+            "resolvedIps": {
+              "type": "string",
+              "analyzer": "lucene.keyword"
+            },
+            "redirectDomains": {
+              "type": "string",
+              "analyzer": "lucene.standard"
+            },
+            "ipRotationCount24h": {
+              "type": "number"
+            },
+            "ttlSeconds": {
+              "type": "number"
+            },
+            "tlsValidDays": {
+              "type": "number"
+            },
+            "redirectChainLength": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "behavior_search_index",
+      "type": "search",
+      "collection": "behavior_metrics",
+      "definition": {
+        "mappings": {
+          "dynamic": false,
+          "fields": {
+            "domain": {
+              "type": "string",
+              "analyzer": "lucene.standard"
+            },
+            "anomalyType": {
+              "type": "string",
+              "analyzer": "lucene.keyword"
+            },
+            "isAnomaly": {
+              "type": "boolean"
+            },
+            "requestsPerMinute": {
+              "type": "number"
+            },
+            "errorRate4xx": {
+              "type": "number"
+            },
+            "errorRate5xx": {
+              "type": "number"
+            },
+            "headerEntropy": {
+              "type": "number"
+            },
+            "avgTimeBetweenRequests": {
+              "type": "number"
+            },
+            "zScoreRpm": {
+              "type": "number"
+            },
+            "zScoreErrorRate": {
+              "type": "number"
+            },
+            "uniqueIps": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

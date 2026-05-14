@@ -7,9 +7,15 @@ const api = axios.create({
 });
 
 // Core
-export const scanURL = (url) => api.post('/scan', { url });
+export const scanURL = (input) => {
+  const payload = typeof input === 'string' ? { url: input } : input;
+  return api.post('/scan', payload);
+};
 // Foundry multi-agent calls may take longer than deterministic pipeline scans.
-export const scanAgenticURL = (url) => api.post('/scan/agentic', { url }, { timeout: 90000 });
+export const scanAgenticURL = (input) => {
+  const payload = typeof input === 'string' ? { url: input } : input;
+  return api.post('/scan/agentic', payload, { timeout: 90000 });
+};
 export const listURLs = (params) => api.get('/urls', { params });
 export const getURL = (id) => api.get(`/urls/${id}`);
 export const updateURLStatus = (id, status) => api.patch(`/urls/${id}/status`, { status });

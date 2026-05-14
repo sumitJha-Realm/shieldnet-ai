@@ -13,13 +13,18 @@ router = APIRouter(tags=["Threat Management"])
 async def get_watched_domains(
     url_repo: URLRepository = Depends(get_url_repository),
 ):
-    """Return the list of watched (monitored) base domains with per-domain URL counts
-    and threat class breakdown, so the UI can populate a domain shortlist filter."""
+    """Return domain stats for filter UI.
+
+    Behavior:
+    - Prefer live domains from urls collection (non-zero counts only).
+    - Keep watched domains prioritized when present in live data.
+    - Fall back to watched list with zeroes only when urls is empty.
+    """
     from models.scan_rules import DEFAULT_SCAN_RULES
     watched = DEFAULT_SCAN_RULES.get("watchedDomains", [])
 
     pipeline = [
-        {"$match": {"baseDomain": {"$in": watched}}},
+        {"$match": {"baseDomain": {"$exists": True, "$ne": ""}}},
         {
             "$group": {
                 "_id": "$baseDomain",
@@ -36,15 +41,13 @@ async def get_watched_domains(
                 "maxRiskScore": {"$max": "$riskScore"},
             }
         },
-        {"$sort": {"maxRiskScore": -1, "_id": 1}},
+        {"$sort": {"total": -1, "maxRiskScore": -1, "_id": 1}},
     ]
     stats = await url_repo.aggregate(pipeline)
     stats_map = {s["_id"]: s for s in stats}
 
-    domains = []
-    for d in watched:
-        s = stats_map.get(d, {})
-        domains.append({
+    def _shape_domain(d: str, s: dict):
+        return {
             "domain": d,
             "total": s.get("total", 0),
             "blocked": s.get("blocked", 0),
@@ -59,7 +62,29 @@ async def get_watched_domains(
             },
             "avgRiskScore": round(s.get("avgRiskScore") or 0, 1),
             "maxRiskScore": round(s.get("maxRiskScore") or 0, 1),
-        })
+            "isWatched": d in watched,
+        }
+
+    domains = []
+
+    # 1) Watched domains that currently have data
+    for d in watched:
+        s = stats_map.get(d)
+        if s and s.get("total", 0) > 0:
+            domains.append(_shape_domain(d, s))
+
+    # 2) Non-watched live domains with data
+    for s in stats:
+        d = s.get("_id")
+        if not d or d in watched:
+            continue
+        if s.get("total", 0) > 0:
+            domains.append(_shape_domain(d, s))
+
+    # 3) Fallback for empty urls collection: show watched list with zeroes
+    if not domains:
+        for d in watched:
+            domains.append(_shape_domain(d, {}))
 
     return {"domains": domains, "total": len(domains)}
 

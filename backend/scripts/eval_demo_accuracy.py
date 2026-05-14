@@ -15,7 +15,7 @@ import json
 import logging
 import argparse
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 from collections import defaultdict
 
 import httpx
@@ -115,10 +115,77 @@ BENCHMARK_URLS: Dict[str, str | None] = {
 }
 
 
-async def scan_url(client: httpx.AsyncClient, url: str, api_url: str) -> Dict:
+BENCHMARK_CASES: List[Dict[str, Any]] = [
+    {
+        "name": url,
+        "url": url,
+        "expected": expected,
+        "surfaceType": "url",
+        "pageContent": "",
+    }
+    for url, expected in BENCHMARK_URLS.items()
+]
+
+BENCHMARK_CASES.extend([
+    {
+        "name": "hi_pan_aadhaar_scam",
+        "url": "https://aadhaar-link-pan.in/update",
+        "expected": "phishing",
+        "surfaceType": "language_text",
+        "pageContent": "आयकर विभाग: आपका PAN आधार से लिंक नहीं है। तुरंत लिंक करें अन्यथा PAN निष्क्रिय हो जाएगा। aadhaar-link-pan.in/update पर जाएं।",
+    },
+    {
+        "name": "hi_sbi_kyc_scam",
+        "url": "https://sbi-kyc-update.in/verify",
+        "expected": "phishing",
+        "surfaceType": "language_text",
+        "pageContent": "प्रिय ग्राहक, आपका SBI खाता ब्लॉक हो गया है। तुरंत KYC अपडेट करें अन्यथा 24 घंटे में खाता बंद कर दिया जाएगा। लिंक: sbi-kyc-update.in/verify OTP दर्ज करें।",
+    },
+    {
+        "name": "ta_epfo_scam",
+        "url": "https://epfo-claim-status.in/check",
+        "expected": "phishing",
+        "surfaceType": "language_text",
+        "pageContent": "உங்கள் EPFO கணக்கில் ₹15,000 நிலுவை உள்ளது. இப்போதே பெற கீழே உள்ள இணைப்பை கிளிக் செய்யவும். ஆதார் எண் மற்றும் வங்கி விவரங்களை உள்ளிடவும்.",
+    },
+    {
+        "name": "bn_pm_kisan_scam",
+        "url": "https://pm-kisan-samman.in/apply",
+        "expected": "phishing",
+        "surfaceType": "language_text",
+        "pageContent": "প্রিয় কৃষক, আপনার PM-KISAN ₹6000 জমা হয়েছে। এখনই নিন - pm-kisan-samman.in/apply আধার নম্বর ও ব্যাঙ্ক তথ্য দিন।",
+    },
+    {
+        "name": "bitly_shortener_abuse",
+        "url": "https://bit.ly/3xR7kQm",
+        "expected": "phishing",
+        "surfaceType": "short_url",
+        "pageContent": "",
+    },
+    {
+        "name": "resolved_paytm_target",
+        "url": "https://paytm-kyc-verify.in/update?ref=qr_poster_delhi",
+        "expected": "phishing",
+        "surfaceType": "resolved_url",
+        "pageContent": "Paytm KYC deadline. Verify immediately to avoid account restriction.",
+    },
+    {
+        "name": "upi_intent_fraud",
+        "url": "upi://pay?pa=fraud@ybl&pn=SBI&am=1&cu=INR",
+        "expected": "phishing",
+        "surfaceType": "short_url",
+        "pageContent": "",
+    },
+])
+
+
+async def scan_url(client: httpx.AsyncClient, case: Dict[str, Any], api_url: str) -> Dict:
     """Scan a URL via the backend API."""
+    url = case["url"]
     try:
         scan_payload = {"url": url}
+        if case.get("pageContent"):
+            scan_payload["pageContent"] = case["pageContent"]
         resp = await client.post(
             f"{api_url}/api/v1/scan",
             json=scan_payload,
@@ -154,28 +221,34 @@ async def evaluate_accuracy(
     Returns:
         Dictionary with metrics (precision, recall, F1, confusion matrix, etc.)
     """
-    test_urls = list(BENCHMARK_URLS.items())
+    test_cases = list(BENCHMARK_CASES)
     if limit:
-        test_urls = test_urls[:limit]
+        test_cases = test_cases[:limit]
 
-    logger.info(f"Starting accuracy evaluation on {len(test_urls)} benchmark URLs")
+    logger.info(f"Starting accuracy evaluation on {len(test_cases)} benchmark cases")
     logger.info(f"API endpoint: {api_url}")
 
     # Initialize metrics collection
     predictions = []
     ground_truths = []
     errors = []
+    surface_predictions: dict[str, list[str]] = defaultdict(list)
+    surface_truths: dict[str, list[str]] = defaultdict(list)
+    case_results: list[dict[str, Any]] = []
     class_labels = {"benign", "phishing", "malware", "c2", "suspicious"}
 
     # Run scans
     async with httpx.AsyncClient() as client:
-        tasks = [scan_url(client, url, api_url) for url, _ in test_urls]
+        tasks = [scan_url(client, case, api_url) for case in test_cases]
         results = await asyncio.gather(*tasks)
 
     # Process results
-    for (url, expected), scan_result in zip(test_urls, results):
+    for case, scan_result in zip(test_cases, results):
+        url = case["url"]
+        expected = case.get("expected")
+        surface_type = case.get("surfaceType", "url")
         if "error" in scan_result:
-            errors.append({"url": url, "error": scan_result["error"]})
+            errors.append({"url": url, "surfaceType": surface_type, "error": scan_result["error"]})
             continue
 
         # Determine predicted class
@@ -195,6 +268,18 @@ async def evaluate_accuracy(
 
         predictions.append(predicted)
         ground_truths.append(expected_norm)
+        surface_predictions[surface_type].append(predicted)
+        surface_truths[surface_type].append(expected_norm)
+        case_results.append({
+            "name": case.get("name", url),
+            "url": url,
+            "surfaceType": surface_type,
+            "expected": expected_norm,
+            "predicted": predicted,
+            "riskScore": scan_result.get("urlRecord", {}).get("riskScore", scan_result.get("riskScore", 0)),
+            "status": scan_result.get("urlRecord", {}).get("status", scan_result.get("status")),
+            "matched": predicted == expected_norm,
+        })
 
         logger.debug(
             f"URL: {url:40s} | Expected: {expected_norm:12s} | "
@@ -203,18 +288,27 @@ async def evaluate_accuracy(
 
     # Calculate metrics
     metrics = calculate_metrics(ground_truths, predictions, class_labels)
-    metrics["benchmark_size"] = len(test_urls)
-    metrics["scan_success"] = len(test_urls) - len(errors)
+    metrics["benchmark_size"] = len(test_cases)
+    metrics["scan_success"] = len(test_cases) - len(errors)
     metrics["scan_errors"] = len(errors)
     metrics["timestamp"] = datetime.utcnow().isoformat()
+    metrics["by_surface_type"] = {
+        surface: calculate_metrics(surface_truths[surface], surface_predictions[surface], class_labels)
+        for surface in sorted(surface_truths.keys())
+    }
 
     # Build detailed results
     results_data = {
         "metrics": metrics,
+        "surfaceTypeCounts": {
+            surface: len(surface_truths[surface])
+            for surface in sorted(surface_truths.keys())
+        },
+        "caseResults": case_results,
         "errors": errors,
         "eval_date": datetime.utcnow().isoformat(),
         "api_url": api_url,
-        "benchmark_urls_count": len(test_urls),
+        "benchmark_urls_count": len(test_cases),
     }
 
     # Log summary
@@ -242,6 +336,17 @@ async def evaluate_accuracy(
                 logger.info(f"    Recall:    {cm['recall']:.4f}")
                 logger.info(f"    F1-Score:  {cm['f1']:.4f}")
                 logger.info(f"    Support:   {cm['support']}")
+
+    if metrics.get("by_surface_type"):
+        logger.info("")
+        logger.info("Metrics By Surface Type:")
+        for surface_type, surface_metrics in metrics["by_surface_type"].items():
+            logger.info(
+                f"  {surface_type}: accuracy={surface_metrics['overall_accuracy']:.4f} "
+                f"precision={surface_metrics['overall_precision']:.4f} "
+                f"recall={surface_metrics['overall_recall']:.4f} "
+                f"f1={surface_metrics['overall_f1']:.4f}"
+            )
 
     logger.info("")
     if metrics.get("confusion_matrix"):

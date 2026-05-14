@@ -16,6 +16,7 @@ from routes.core.enricher import router as enricher_router
 from routes.core.scan_rules import router as scan_rules_router
 from routes.core.url_graph import router as url_graph_router
 from routes.core.campaigns import router as campaigns_router
+from routes.core.batch_scan import router as batch_scan_router
 from routes.search.atlas_search import router as atlas_search_router
 from routes.search.vector_search import router as vector_search_router
 from routes.search.unified_search import router as unified_search_router
@@ -73,6 +74,7 @@ app.include_router(enricher_router, prefix="/api/v1")
 app.include_router(scan_rules_router, prefix="/api/v1")
 app.include_router(url_graph_router, prefix="/api/v1")
 app.include_router(campaigns_router, prefix="/api/v1")
+app.include_router(batch_scan_router, prefix="/api/v1")
 app.include_router(atlas_search_router, prefix="/api/v1/search")
 app.include_router(vector_search_router, prefix="/api/v1/search")
 app.include_router(unified_search_router, prefix="/api/v1/search")

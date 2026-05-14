@@ -54,6 +54,26 @@ def main():
     story.append(p("- Rules Management: active threshold and weight configuration."))
     story.append(p("- URL Graph: relation edges between similar threats."))
 
+    story.append(h("4.1 Backend Module Stack"))
+    story.append(p("API layer"))
+    story.append(p("FastAPI + Uvicorn + Pydantic: defines REST endpoints, request validation, response typing, and ASGI runtime."))
+    story.append(p("Data layer"))
+    story.append(p("Motor (async MongoDB driver): repository-pattern CRUD, aggregations, and index-aware querying."))
+    story.append(p("Config layer"))
+    story.append(p("python-dotenv + environment variables: loads runtime secrets and deployment configuration values."))
+    story.append(p("HTTP integration"))
+    story.append(p("httpx: calls Voyage embedding API, Foundry LLM endpoint, and external enrichment APIs."))
+    story.append(p("URL scoring logic"))
+    story.append(p("Custom risk engine + python-Levenshtein: threat scoring, typo-tolerant phishing keyword matching, and classification floors/thresholds."))
+    story.append(p("Enrichment DNS"))
+    story.append(p("dnspython: A/AAAA/CNAME/MX/NS/TXT lookups, DNSSEC checks, and reverse DNS enrichment."))
+    story.append(p("Enrichment WHOIS"))
+    story.append(p("python-whois: domain age, registrar profile, privacy hints, and expiry-window signals."))
+    story.append(p("Enrichment TLS"))
+    story.append(p("ssl + socket: certificate type, issuer confidence, domain-match checks, recency, and expiry risk signals."))
+    story.append(p("Testing"))
+    story.append(p("pytest + pytest-asyncio: unit tests and async behavior validation across backend modules."))
+
     story.append(h("5. Data Sources and Ingestion"))
     story.append(p("- Live scan ingestion writes/updates records in urls collection."))
     story.append(p("- Threat-intel seed writes threat docs into urls using docType=threat_intel."))
@@ -136,7 +156,59 @@ def main():
     story.append(h("8. Detection Flow"))
     story.append(p("1) Input URL -> 2) Feature extraction -> 3) Summary + embedding -> 4) Vector search -> 5) Risk engine -> 6) Campaign tag/update -> 7) Persist + response"))
 
-    story.append(h("9. Operational Notes"))
+    story.append(h("9. URL Scoring System (Detailed)"))
+    story.append(p("ShieldNet computes a composite risk score from 0 to 100. The score blends deterministic checks, semantic similarity evidence, visual impersonation signals, and analyst feedback so each verdict is evidence-backed and explainable."))
+    story.append(p("9.1 Scoring bands"))
+    story.append(p("- 0-44: low risk (allow/monitor).<br/>"
+             "- 45-69: medium risk (analyst review queue).<br/>"
+             "- 70-100: high risk (block/quarantine recommendation)."))
+    story.append(p("9.2 Weighted signal composition"))
+    story.append(p("- Visual impersonation checks: look-alike branding, suspicious login flows, and favicon/title mismatch indicators.<br/>"
+             "- Vector evidence: cosine similarity against known phishing and campaign exemplars in Atlas Vector Search.<br/>"
+             "- Lexical/search evidence: Atlas text search matches for payload patterns, abuse terms, and known lure phrases.<br/>"
+             "- Structural and DNS/TLS checks: redirect depth, domain age/entropy, resolver anomalies, and certificate posture.<br/>"
+             "- Human feedback: analyst-confirmed true/false positives used to adjust thresholds/weights and improve precision over time."))
+    story.append(p("9.3 Explainability"))
+    story.append(p("Each scan returns a score plus supporting factors so analysts can see why a URL was classified as block, review, or allow. This improves auditability and speeds triage decisions."))
+    story.append(p("9.4 How scoring works in practice"))
+    story.append(p("- Step A: normalize and parse URL structure (scheme, host, path, query, redirects).<br/>"
+             "- Step B: lexical and typo analysis with Levenshtein-style distance against phishing terms and protected brands.<br/>"
+             "- Step C: enrichment evidence (DNS/WHOIS/TLS) contributes positive or negative risk deltas.<br/>"
+             "- Step D: semantic retrieval computes vector similarity to prior malicious URLs/campaign exemplars.<br/>"
+             "- Step E: weighted fusion computes base score, then classification floor rules prevent under-scoring for high-confidence phishing patterns.<br/>"
+             "- Step F: policy thresholds map score to allow/review/block with reason codes for analyst traceability."))
+
+    story.append(h("10. Pipeline Mode vs Foundry Mode"))
+    story.append(p("ShieldNet supports two execution modes so customers can balance cost, speed, and depth of reasoning."))
+    story.append(p("10.1 Deterministic pipeline mode (default)"))
+    story.append(p("- FastAPI pipeline runs feature extraction, vector/text retrieval, rule scoring, and policy mapping.<br/>"
+             "- Best for high-throughput screening, lower latency, and predictable cost.<br/>"
+             "- Produces stable risk outputs suitable for SIEM/SOAR ingestion."))
+    story.append(p("10.2 Foundry agentic mode (optional)"))
+    story.append(p("- Adds Microsoft Foundry reasoning to enrich narrative, summarize evidence, and propose analyst actions.<br/>"
+             "- Useful for complex or ambiguous cases where additional context synthesis improves analyst confidence.<br/>"
+             "- Can run as a selective escalation step only for medium-confidence URLs."))
+    story.append(p("10.3 Practical operating model"))
+    story.append(p("Common deployment: process all URLs through deterministic pipeline first, then route only borderline or high-impact cases to Foundry for deeper explanation and response guidance."))
+
+    story.append(h("11. How Visual Checks + Vector Search + Human Feedback Improve URL Scoring"))
+    story.append(p("- Visual checks capture brand impersonation and deceptive UX indicators that raw text features may miss.<br/>"
+             "- Vector search finds semantically similar malicious behavior even when attackers mutate tokens/domains.<br/>"
+             "- Human feedback closes the loop by correcting edge cases and reducing recurring false positives.<br/>"
+             "- Combined effect: stronger recall on novel attacks while preserving precision on legitimate look-alike traffic."))
+    story.append(p("This blended approach is especially effective against phishing campaigns that evolve quickly across domains, paths, and social-engineering language."))
+
+    story.append(h("12. Hybrid Enforcement Engine Stages"))
+    story.append(p("The Hybrid Enforcement Engine combines deterministic controls with semantic retrieval and optional agentic escalation."))
+    story.append(p("- Stage 1: Intake and normalization - sanitize URL input, extract canonical features, and build analysis context.<br/>"
+             "- Stage 2: Deterministic risk checks - apply rule-based signals (payload patterns, DGA/entropy, redirects, DNS/TLS anomalies).<br/>"
+             "- Stage 3: Hybrid retrieval - run Atlas text search and vector search, then apply rank fusion for stronger evidence coverage.<br/>"
+             "- Stage 4: Composite scoring - merge deterministic + retrieval + visual impersonation signals into a single risk score.<br/>"
+             "- Stage 5: Enforcement decision - map score and confidence to allow, analyst-review, or block actions.<br/>"
+             "- Stage 6: Analyst feedback loop - capture dispositions to tune thresholds/weights and improve future precision/recall.<br/>"
+             "- Stage 7: Optional Foundry escalation - invoke Foundry reasoning for ambiguous/high-impact cases to enrich explanation and response guidance."))
+
+    story.append(h("13. Operational Notes"))
     story.append(p("- This is a validation/demo deployment and should be calibrated for production traffic."))
     story.append(p("- Keep secrets in environment variables and enforce role-based access on rules/status overrides."))
 

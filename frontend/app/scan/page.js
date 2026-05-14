@@ -12,6 +12,214 @@ import RiskBreakdownChart from '../../components/scanner/RiskBreakdownChart';
 import CampaignBanner from '../../components/scanner/CampaignBanner';
 import { scanAgenticURL, scanURL, updateURLStatus } from '../../lib/api';
 
+const DEMO_URL_CASES = [
+  {
+    id: 'uc1',
+    label: 'UC 1 Typosquatting',
+    url: 'https://sbi-secure-login.com/verify',
+    category: 'Threat Signals',
+    expected: 'phishing',
+    note: 'SBI brand impersonation',
+  },
+  {
+    id: 'uc2',
+    label: 'UC 2 Phishing URL ID',
+    url: 'https://secure-hdfc-banking.in/netbanking/login',
+    category: 'Threat Signals',
+    expected: 'phishing',
+    note: 'Credential-harvesting HDFC clone',
+  },
+  {
+    id: 'uc3',
+    label: 'UC 3 Threat Intel Phishing',
+    url: 'https://login-microsoft365-verify.com/auth',
+    category: 'Threat Signals',
+    expected: 'phishing',
+    note: 'Known M365 credential phishing',
+  },
+  {
+    id: 'uc4',
+    label: 'UC 4 Gov Impersonation Feed',
+    url: 'https://aadhaar-update-portal.in/ekyc',
+    category: 'Threat Signals',
+    expected: 'phishing',
+    note: 'Aadhaar update impersonation',
+  },
+  {
+    id: 'uc5',
+    label: 'UC 5 Homoglyph Attack',
+    url: 'https://xn--gogle-mra.com/login',
+    category: 'Threat Signals',
+    expected: 'phishing',
+    note: 'IDN lookalike of Google',
+  },
+  {
+    id: 'uc6',
+    label: 'UC 6 Shortener Abuse',
+    url: 'https://bit.ly/3xR7kQm',
+    category: 'Threat Signals',
+    expected: 'phishing',
+    note: 'Short URL redirect abuse',
+  },
+  {
+    id: 'uc7',
+    label: 'UC 7 Brand Impersonation',
+    url: 'https://icici-bank-rewards.com/claim',
+    category: 'Threat Signals',
+    expected: 'phishing',
+    note: 'ICICI rewards lure',
+  },
+  {
+    id: 'uc8',
+    label: 'UC 8 Malware Distribution',
+    url: 'https://free-software-download.xyz/adobe-reader-update.exe',
+    category: 'Threat Signals',
+    expected: 'malware',
+    note: 'Trojan disguised as software update',
+  },
+  {
+    id: 'uc9',
+    label: 'UC 9 Hindi Banking Scam',
+    url: 'https://sbi-kyc-update.in/verify',
+    category: 'Regional Threats',
+    expected: 'phishing',
+    note: 'Hindi KYC urgency scam',
+    pageContent: 'प्रिय ग्राहक, आपका SBI खाता ब्लॉक हो गया है। तुरंत KYC अपडेट करें अन्यथा 24 घंटे में खाता बंद कर दिया जाएगा। लिंक: sbi-kyc-update.in/verify OTP दर्ज करें।',
+  },
+  {
+    id: 'uc10',
+    label: 'UC 10 Tamil EPFO Scam',
+    url: 'https://epfo-claim-status.in/check',
+    category: 'Regional Threats',
+    expected: 'phishing',
+    note: 'Tamil EPFO payout lure',
+    pageContent: 'உங்கள் EPFO கணக்கில் ₹15,000 நிலுவை உள்ளது. இப்போதே பெற கீழே உள்ள இணைப்பை கிளிக் செய்யவும். ஆதார் எண் மற்றும் வங்கி விவரங்களை உள்ளிடவும்.',
+  },
+  {
+    id: 'uc11',
+    label: 'UC 11 Bengali PM-KISAN',
+    url: 'https://pm-kisan-samman.in/apply',
+    category: 'Regional Threats',
+    expected: 'phishing',
+    note: 'Bengali subsidy fraud text',
+    pageContent: 'প্রিয় কৃষক, আপনার PM-KISAN ₹6000 জমা হয়েছে। এখনই নিন - pm-kisan-samman.in/apply আধার নম্বর ও ব্যাঙ্ক তথ্য দিন।',
+  },
+  {
+    id: 'uc12',
+    label: 'UC 12 Hindi PAN-Aadhaar Scam',
+    url: 'https://aadhaar-link-pan.in/update',
+    category: 'Regional Threats',
+    expected: 'phishing',
+    note: 'Tax authority impersonation',
+    pageContent: 'आयकर विभाग: आपका PAN आधार से लिंक नहीं है। तुरंत लिंक करें अन्यथा PAN निष्क्रिय हो जाएगा। aadhaar-link-pan.in/update पर जाएं।',
+  },
+  {
+    id: 'uc13',
+    label: 'UC 13 Visual Baseline SBI',
+    url: 'https://onlinesbi.sbi',
+    category: 'Visual Intelligence',
+    expected: 'benign',
+    note: 'Official SBI baseline page',
+  },
+  {
+    id: 'uc14',
+    label: 'UC 14 Visual SBI Phish Clone',
+    url: 'https://sbi-secure-login.com/verify',
+    category: 'Visual Intelligence',
+    expected: 'phishing',
+    note: 'Near-identical visual impersonation',
+  },
+  {
+    id: 'uc15',
+    label: 'UC 15 Visual Baseline HDFC',
+    url: 'https://hdfcbank.com',
+    category: 'Visual Intelligence',
+    expected: 'benign',
+    note: 'Official HDFC baseline page',
+  },
+  {
+    id: 'uc16',
+    label: 'UC 16 Visual HDFC Phish Clone',
+    url: 'https://secure-hdfc-banking.in/netbanking/login',
+    category: 'Visual Intelligence',
+    expected: 'phishing',
+    note: 'Fake HDFC login with harvesting fields',
+  },
+  {
+    id: 'uc17',
+    label: 'UC 17 Gov Portal Baseline',
+    url: 'https://eprocure.gov.in',
+    category: 'Visual Intelligence',
+    expected: 'benign',
+    note: 'Official portal baseline',
+  },
+  {
+    id: 'uc18',
+    label: 'UC 18 Watering Hole Variant',
+    url: 'https://eprocure.gov.in',
+    category: 'Visual Intelligence',
+    expected: 'suspicious',
+    note: 'Use pageContent to simulate injected compromise',
+    pageContent: 'COMPROMISED: injected invisible iframe loads malware from cdn-analytics-lib.com. Additional script tags indicate watering-hole style tampering.',
+  },
+  {
+    id: 'uc19',
+    label: 'UC 19 Infra Known Phish Host',
+    url: 'https://sbi-secure-login.com/verify',
+    category: 'Infrastructure Intel',
+    expected: 'phishing',
+    note: 'Known high-risk infrastructure',
+  },
+  {
+    id: 'uc20',
+    label: 'UC 20 Redirect Infra Chain',
+    url: 'https://click-track-offer.com',
+    category: 'Infrastructure Intel',
+    expected: 'suspicious',
+    note: 'Redirect-chain infrastructure signal',
+  },
+  {
+    id: 'uc21',
+    label: 'UC 21 TLS Anomaly Domain',
+    url: 'https://secure-banking-portal.xyz',
+    category: 'Infrastructure Intel',
+    expected: 'suspicious',
+    note: 'TLS/SAN mismatch infrastructure pattern',
+  },
+  {
+    id: 'uc22',
+    label: 'UC 22 Fast-Flux Botnet',
+    url: 'https://fast-flux-botnet.top',
+    category: 'Infrastructure Intel',
+    expected: 'c2',
+    note: 'Fast-flux rotation pattern',
+  },
+  {
+    id: 'uc23',
+    label: 'UC 23 Fast-Flux Variant',
+    url: 'https://update-service-cdn.buzz',
+    category: 'Infrastructure Intel',
+    expected: 'malware',
+    note: 'Botnet-style rotating payload host',
+  },
+  {
+    id: 'uc24',
+    label: 'UC 24 Supply Chain CDN',
+    url: 'https://cdn-analytics-lib.com/tracker.js',
+    category: 'Infrastructure Intel',
+    expected: 'malware',
+    note: 'Compromised script delivery channel',
+  },
+  {
+    id: 'uc25',
+    label: 'UC 25 Behavior Credential Stuffing',
+    url: 'https://sbi-secure-login.com/verify',
+    category: 'Behavior Metrics',
+    expected: 'phishing',
+    note: 'High automation/anomaly behavior case',
+  },
+];
+
 /* ── STATUS_PILL colours ─────────────────────────────────────────── */
 const DOC_STATUS_COLORS = {
   blocked:      { bg: '#FFEAE5', color: '#CF4A22' },
@@ -202,13 +410,20 @@ export default function ScanPage() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [scanMode, setScanMode] = useState('pipeline');
+  const [inputUrl, setInputUrl] = useState('');
+  const [inputPageContent, setInputPageContent] = useState('');
+  const [lastSubmittedPayload, setLastSubmittedPayload] = useState(null);
 
-  const handleScan = async (url) => {
+  const handleScan = async (input) => {
+    const payload = typeof input === 'string' ? { url: input, pageContent: '' } : input;
+    if (!payload?.url) return;
+
     setLoading(true);
     setError(null);
     setResult(null);
+    setLastSubmittedPayload(payload);
     try {
-      const res = scanMode === 'agentic' ? await scanAgenticURL(url) : await scanURL(url);
+      const res = scanMode === 'agentic' ? await scanAgenticURL(payload) : await scanURL(payload);
       setResult(res.data);
     } catch (err) {
       setError(err.response?.data?.detail || 'Scan failed. Ensure the backend is running.');
@@ -234,6 +449,12 @@ export default function ScanPage() {
 
   const rec = result?.urlRecord;
   const action = result?.recommendedAction;
+
+  const handleSelectUseCase = (useCase) => {
+    setInputUrl(useCase.url || '');
+    setInputPageContent(useCase.pageContent || '');
+    setError(null);
+  };
 
   const ACTION_STYLES = {
     block: { bg: '#FFEAE5', color: '#CF4A22', label: 'RECOMMENDED: Block this URL immediately' },
@@ -279,7 +500,69 @@ export default function ScanPage() {
         })}
       </div>
 
-      <URLInput onSubmit={handleScan} loading={loading} />
+      <URLInput
+        onSubmit={handleScan}
+        loading={loading}
+        urlValue={inputUrl}
+        pageContentValue={inputPageContent}
+        onUrlChange={setInputUrl}
+        onPageContentChange={setInputPageContent}
+      />
+
+      <div style={{
+        background: '#fff', borderRadius: 12, padding: 20,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: '#1a1c1e', margin: 0 }}>
+            Demo URL Test Matrix (Click to Prefill Each Use Case)
+          </h3>
+          <span style={{ fontSize: 12, color: '#5C6C75' }}>
+            Prefill URL + optional text, then click Analyze
+          </span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 10 }}>
+          {DEMO_URL_CASES.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => handleSelectUseCase(c)}
+              disabled={loading}
+              style={{
+                textAlign: 'left',
+                border: '1px solid #E8EDEB',
+                background: '#FAFBFC',
+                borderRadius: 10,
+                padding: 12,
+                cursor: loading ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1c1e' }}>{c.label}</div>
+              <div style={{ fontSize: 11, color: '#5C6C75', marginTop: 4, wordBreak: 'break-all' }}>{c.url}</div>
+              <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{
+                  padding: '2px 8px', borderRadius: 10,
+                  background: '#E8EDEB', color: '#3D4F58',
+                  fontSize: 10, fontWeight: 700,
+                }}>
+                  {c.category}
+                </span>
+                <span style={{
+                  padding: '2px 8px', borderRadius: 10,
+                  background: c.expected === 'benign' ? '#E3FCF7' : '#FFEAE5',
+                  color: c.expected === 'benign' ? '#00684A' : '#CF4A22',
+                  fontSize: 10, fontWeight: 700,
+                }}>
+                  Expected: {c.expected}
+                </span>
+                <span style={{ fontSize: 10, color: '#889397' }}>{c.note}</span>
+              </div>
+              <div style={{ marginTop: 8, fontSize: 11, color: '#016BF8', fontWeight: 700 }}>
+                Click to prefill input form
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
 
       {error && (
         <div style={{
@@ -293,6 +576,23 @@ export default function ScanPage() {
 
       {result && (
         <>
+          {lastSubmittedPayload && (
+            <div style={{
+              padding: '12px 16px', borderRadius: 10,
+              background: '#F5F6F7', border: '1px solid #E8EDEB',
+              fontSize: 12, color: '#3D4F58',
+            }}>
+              <div style={{ fontWeight: 700, color: '#1a1c1e', marginBottom: 4 }}>Request Context Used</div>
+              <div><strong>URL:</strong> {lastSubmittedPayload.url}</div>
+              <div><strong>Optional text provided:</strong> {lastSubmittedPayload.pageContent ? 'Yes' : 'No'}</div>
+              {lastSubmittedPayload.pageContent && (
+                <div style={{ marginTop: 4, lineHeight: 1.5 }}>
+                  <strong>Text snippet:</strong> {lastSubmittedPayload.pageContent.substring(0, 180)}{lastSubmittedPayload.pageContent.length > 180 ? '...' : ''}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Status Note Banner — shows when URL has an authoritative status note */}
           {(result.statusOverrideNote || rec.statusNote) && (
             <div style={{

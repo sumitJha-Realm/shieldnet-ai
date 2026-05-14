@@ -82,6 +82,13 @@ class WaterfallCache:
             return True
         return False
 
+    def invalidate_url(self, url: str) -> int:
+        """Remove all cache entries associated with a URL, including text-aware variants."""
+        matched_keys = [key for key in self._store if key == url or key.startswith(f"{url}#pc:")]
+        for key in matched_keys:
+            del self._store[key]
+        return len(matched_keys)
+
     def clear(self) -> None:
         """Flush the entire cache."""
         self._store.clear()

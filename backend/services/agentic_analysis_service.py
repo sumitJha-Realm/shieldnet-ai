@@ -25,8 +25,8 @@ class AgenticAnalysisService:
         self._agent_chain = self._parse_agent_chain()
         self._agent_prompts = self._load_agent_prompts()
 
-    async def scan_url(self, url: str) -> dict[str, Any]:
-        result = await self._url_analysis_service.scan_url(url)
+    async def scan_url(self, url: str, page_content: str = "") -> dict[str, Any]:
+        result = await self._url_analysis_service.scan_url(url, page_content=page_content)
 
         if not self._api_key:
             result["agenticAnalysis"] = {

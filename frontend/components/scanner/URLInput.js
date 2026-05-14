@@ -1,13 +1,22 @@
 'use client';
 
-import { useState } from 'react';
-
-export default function URLInput({ onSubmit, loading }) {
-  const [url, setUrl] = useState('');
+export default function URLInput({
+  onSubmit,
+  loading,
+  urlValue,
+  pageContentValue,
+  onUrlChange,
+  onPageContentChange,
+}) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (url.trim()) onSubmit(url.trim());
+    if ((urlValue || '').trim()) {
+      onSubmit({
+        url: (urlValue || '').trim(),
+        pageContent: (pageContentValue || '').trim(),
+      });
+    }
   };
 
   return (
@@ -22,8 +31,8 @@ export default function URLInput({ onSubmit, loading }) {
         <input
           type="text"
           placeholder="Enter URL to analyze (e.g. http://suspicious-site.xyz/login)"
-          value={url}
-          onChange={e => setUrl(e.target.value)}
+          value={urlValue || ''}
+          onChange={e => onUrlChange?.(e.target.value)}
           style={{
             flex: 1, padding: '12px 16px', borderRadius: 8,
             border: '1px solid #E8EDEB', fontSize: 14,
@@ -34,7 +43,7 @@ export default function URLInput({ onSubmit, loading }) {
         />
         <button
           type="submit"
-          disabled={loading || !url.trim()}
+          disabled={loading || !(urlValue || '').trim()}
           style={{
             padding: '12px 32px', borderRadius: 8,
             background: loading ? '#5C6C75' : '#016BF8',
@@ -45,6 +54,31 @@ export default function URLInput({ onSubmit, loading }) {
         >
           {loading ? 'Analyzing...' : 'Analyze'}
         </button>
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <textarea
+          placeholder="Optional: paste observed page text/SMS content for better multilingual accuracy"
+          value={pageContentValue || ''}
+          onChange={e => onPageContentChange?.(e.target.value)}
+          rows={4}
+          style={{
+            width: '100%',
+            padding: '12px 16px',
+            borderRadius: 8,
+            border: '1px solid #E8EDEB',
+            fontSize: 13,
+            outline: 'none',
+            resize: 'vertical',
+            fontFamily: 'inherit',
+            lineHeight: 1.4,
+            marginTop: 12,
+          }}
+          onFocus={e => e.target.style.borderColor = '#016BF8'}
+          onBlur={e => e.target.style.borderColor = '#E8EDEB'}
+        />
+        <div style={{ marginTop: 6, fontSize: 11, color: '#5C6C75' }}>
+          If you add optional text, it is sent in the same scan request and used for multilingual/context detection.
+        </div>
       </div>
     </form>
   );

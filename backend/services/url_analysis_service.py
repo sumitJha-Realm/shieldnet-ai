@@ -1,5 +1,7 @@
-"""URL analysis service — core scanning logic."""
+"""URL analysis service — core scanning logic with multi-collection support (25 UCs)."""
 
+import asyncio
+import hashlib
 import logging
 import time
 from datetime import datetime
@@ -8,7 +10,8 @@ from urllib.parse import urlparse
 
 from repositories.impl.url_repository import URLRepository
 from repositories.impl.scan_rules_repository import ScanRulesRepository
-from services.embedding_service import get_embedding
+from repositories.impl.multi_collection_repository import MultiCollectionRepository
+from services.embedding_service import get_embedding, get_multilingual_embedding, get_visual_embedding
 from services.search.atlas_search_service import AtlasSearchService
 from services.search.vector_search_service import VectorSearchService
 from services.waterfall_cache import WaterfallCache
@@ -19,6 +22,9 @@ from utils.url_feature_extractor import (
     enrich_features,
     build_summary_text,
     build_campaign_enriched_summary,
+    build_scan_signals,
+    build_regional_text,
+    build_visual_description,
     find_phishing_keyword_matches,
     calculate_risk_score,
     classify_threat,
@@ -31,6 +37,11 @@ from utils.url_feature_extractor import (
 
 logger = logging.getLogger(__name__)
 
+KNOWN_SHORTENERS = {
+    "bit.ly", "tinyurl.com", "t.co", "goo.gl", "is.gd", "rebrand.ly",
+    "shorturl.at", "cutt.ly", "rb.gy", "ow.ly",
+}
+
 
 class URLAnalysisService:
     def __init__(
@@ -38,6 +49,7 @@ class URLAnalysisService:
         url_repo: URLRepository,
         vector_search_service: "VectorSearchService",
         atlas_search_service: Optional["AtlasSearchService"] = None,
+        multi_collection_repo: Optional["MultiCollectionRepository"] = None,
         cache: Optional["WaterfallCache"] = None,
         rules_repo: Optional["ScanRulesRepository"] = None,
         graph_service: Optional["URLGraphService"] = None,
@@ -46,6 +58,7 @@ class URLAnalysisService:
         self._url_repo = url_repo
         self._vector_search = vector_search_service
         self._atlas_search = atlas_search_service
+        self._multi = multi_collection_repo
         self._cache = cache or WaterfallCache()
         self._rules_repo = rules_repo
         self._graph_service = graph_service
@@ -66,7 +79,118 @@ class URLAnalysisService:
             return d[4:]
         return d
 
-    async def scan_url(self, url: str) -> dict:
+    @staticmethod
+    def _normalize_page_content(page_content: str) -> str:
+        return " ".join((page_content or "").split())
+
+    @classmethod
+    def _build_cache_key(cls, url: str, page_content: str) -> str:
+        normalized = cls._normalize_page_content(page_content)
+        if not normalized:
+            return url
+        digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+        return f"{url}#pc:{digest}"
+
+    @staticmethod
+    def _append_page_content(summary_text: str, page_content: str) -> str:
+        normalized = " ".join((page_content or "").split())
+        if not normalized:
+            return summary_text
+        return f"{summary_text}, page content snippet {normalized[:1000]}"
+
+    @staticmethod
+    def _intel_feed_name(doc: dict) -> str:
+        feed_metadata = doc.get("feedMetadata", {})
+        return (
+            doc.get("feedName")
+            or feed_metadata.get("feedName")
+            or doc.get("source")
+            or doc.get("_sourceCollection")
+            or "Unknown"
+        )
+
+    @staticmethod
+    def _intel_pattern_type(doc: dict) -> str:
+        return (
+            doc.get("threatClassification")
+            or doc.get("threatType")
+            or doc.get("attackCategory")
+            or doc.get("anomalyType")
+            or doc.get("_sourceCollection")
+            or "unknown"
+        )
+
+    @classmethod
+    def _refine_classification(
+        cls,
+        classification: str,
+        risk: float,
+        thresholds: dict,
+        features: dict,
+        threat_intel_matches: list[dict],
+        page_content: str,
+    ) -> str:
+        if classification in {"phishing", "c2"}:
+            return classification
+
+        review_score = thresholds.get("reviewScore", 50)
+        if risk < review_score:
+            return classification
+
+        phishing_keywords = thresholds.get("phishingKeywords") or [
+            "login", "verify", "update", "account", "otp", "secure",
+            "kyc", "link", "refund", "claim", "aadhaar", "pan",
+        ]
+        keyword_matches = find_phishing_keyword_matches(
+            f"{features.get('domain', '')} {page_content}".strip(),
+            keywords=phishing_keywords,
+        )
+        has_phishing_keywords = bool(keyword_matches["exact"] or keyword_matches["fuzzy"])
+        detected_language = features.get("detectedLanguage", "en")
+        attack_categories = {
+            (doc.get("attackCategory") or "").lower()
+            for doc in threat_intel_matches
+            if doc.get("score", 0) >= thresholds.get("threatIntelMinScore", 0.85)
+        }
+        source_collections = {
+            (doc.get("_sourceCollection") or "").lower()
+            for doc in threat_intel_matches
+        }
+
+        phishing_like_categories = {
+            "government_impersonation",
+            "banking_scam",
+            "credential_harvesting",
+            "phishing",
+            "qr_phishing",
+            "upi_fraud",
+            "shortener_abuse",
+        }
+
+        domain = (features.get("domain") or "").lower()
+        is_shortener = domain in KNOWN_SHORTENERS
+        is_upi = (features.get("rawUrl") or "").startswith("upi://")
+        query_params = features.get("queryParams") or {}
+        has_qr_hint = "qr" in (features.get("rawUrl") or "").lower() or any(
+            any(str(v).lower().startswith("qr_") or str(v).lower() == "qr" for v in values)
+            for values in query_params.values()
+        )
+
+        if attack_categories & phishing_like_categories:
+            return "phishing"
+
+        if "regional_threats" in source_collections and detected_language != "en":
+            return "phishing"
+
+        if is_shortener or is_upi or has_qr_hint:
+            return "phishing"
+
+        if has_phishing_keywords and features.get("brandImpersonation", {}).get("closest_brand"):
+            return "phishing"
+
+        return classification
+
+    async def scan_url(self, url: str, page_content: str = "") -> dict:
         """Full URL scanning pipeline with waterfall enforcement.
 
         Tier 1 — L1 cache (< 1ms): Check in-memory LRU for recent result
@@ -75,6 +199,8 @@ class URLAnalysisService:
         """
         start = time.monotonic()
         logger.info("Scanning URL: %s", url)
+        normalized_page_content = self._normalize_page_content(page_content)
+        cache_key = self._build_cache_key(url, normalized_page_content)
 
         # Load admin-configurable rules (cached per request)
         rules = None
@@ -85,7 +211,7 @@ class URLAnalysisService:
                 logger.warning("Failed to load scan rules, using defaults: %s", e)
 
         # ── L1: In-memory cache check ────────────────────────────────────
-        cached = self._cache.get(url)
+        cached = self._cache.get(cache_key)
         if cached:
             elapsed = (time.monotonic() - start) * 1000
             cached["waterfallTier"] = "L1_CACHE"
@@ -105,7 +231,7 @@ class URLAnalysisService:
             except Exception as e:
                 logger.warning("Canonical domain lookup failed for %s: %s", canonical_domain, e)
 
-        if existing and existing.get("embedding"):
+        if existing and existing.get("embedding") and not normalized_page_content:
             elapsed = (time.monotonic() - start) * 1000
             logger.info("L2 DB hit for %s (%.2fms)", url, elapsed)
             # Re-run vector search with stored embedding for fresh intel
@@ -114,10 +240,11 @@ class URLAnalysisService:
                 authoritative_record=canonical_authority,
                 canonical_domain=canonical_domain,
                 rules=rules,
+                page_content=normalized_page_content,
             )
             result["waterfallTier"] = "L2_DATABASE"
             result["latencyMs"] = round((time.monotonic() - start) * 1000, 2)
-            self._cache.put(url, result)
+            self._cache.put(cache_key, result)
             return result
 
         # ── L3: Full analysis pipeline ───────────────────────────────────
@@ -127,10 +254,11 @@ class URLAnalysisService:
             authoritative_record=canonical_authority,
             canonical_domain=canonical_domain,
             rules=rules,
+            page_content=normalized_page_content,
         )
         result["waterfallTier"] = "L3_FULL_PIPELINE"
         result["latencyMs"] = round((time.monotonic() - start) * 1000, 2)
-        self._cache.put(url, result)
+        self._cache.put(cache_key, result)
         logger.info("L3 full pipeline for %s (%.2fms)", url, result["latencyMs"])
         return result
 
@@ -141,6 +269,7 @@ class URLAnalysisService:
         authoritative_record: dict = None,
         canonical_domain: str = "",
         rules: dict = None,
+        page_content: str = "",
     ) -> dict:
         """Run the complete analysis pipeline."""
 
@@ -156,12 +285,15 @@ class URLAnalysisService:
 
         # 1. Feature extraction + advanced enrichment
         features = extract_features(url)
+        features["rawUrl"] = url
         features["canonicalDomain"] = canonical_domain or self._canonical_domain(features.get("domain", ""))
         features = enrich_features(url, features, modules=modules)
         features["payloadTypes"] = detect_payload_types(url)
+        features["detectedLanguage"] = build_scan_signals(url, features, page_content=page_content)["detected_language"]
 
         # 2. Build initial summary text for embedding (pre-classification)
         summary_text = build_summary_text(url, features)
+        summary_text = self._append_page_content(summary_text, page_content)
 
         # 3. Generate embedding (or reuse existing)
         embedding = existing_embedding
@@ -229,7 +361,78 @@ class URLAnalysisService:
             except Exception as e:
                 logger.warning("Vector search failed: %s", e)
 
-        # 4b. Atlas lexical enrichment (threat-intel focused)
+        # 4b. Multi-collection search (threat_signals, infra, regional, visual, behavior)
+        multi_results = {}
+        multi_search_ms: float = 0.0
+        if self._multi and embedding:
+            try:
+                _mc_start = time.monotonic()
+                # Determine scan signals for smart routing
+                scan_signals = build_scan_signals(url, features, page_content=page_content)
+
+                # Build embeddings for conditional collections (parallel)
+                regional_embedding = None
+                visual_embedding = None
+
+                embedding_tasks = []
+                embedding_keys = []
+
+                if scan_signals["detected_language"] != "en":
+                    regional_text = build_regional_text(url, page_content, features)
+                    embedding_tasks.append(get_multilingual_embedding(regional_text))
+                    embedding_keys.append("regional")
+
+                if scan_signals["has_screenshot"]:
+                    visual_desc = build_visual_description(url, features)
+                    embedding_tasks.append(get_visual_embedding(visual_desc))
+                    embedding_keys.append("visual")
+
+                if embedding_tasks:
+                    emb_results = await asyncio.gather(*embedding_tasks, return_exceptions=True)
+                    for key, result in zip(embedding_keys, emb_results):
+                        if isinstance(result, Exception):
+                            logger.warning("Embedding for %s failed: %s", key, result)
+                        elif key == "regional":
+                            regional_embedding = result
+                        elif key == "visual":
+                            visual_embedding = result
+
+                # Fan-out search across all relevant collections
+                multi_results = await self._multi.search_all_collections(
+                    domain=features["domain"],
+                    threat_embedding=embedding,
+                    regional_embedding=regional_embedding,
+                    visual_embedding=visual_embedding,
+                    has_infra_data=scan_signals["has_infra_data"],
+                    has_traffic_anomaly=scan_signals["has_traffic_anomaly"],
+                    check_fast_flux=features.get("dnsStatus") == "active" and features["hostingFlags"]["domainAgeDays"] < 30,
+                    check_tls_anomaly=not features["hostingFlags"]["sslValid"],
+                )
+                multi_search_ms = round((time.monotonic() - _mc_start) * 1000, 2)
+
+                # Merge threat_signals results into similar_threats
+                for doc in multi_results.get("threat_signals", []):
+                    if len(similar_threats) < combined_limit:
+                        doc["score"] = doc.get("vectorScore", 0.0)
+                        similar_threats.append(doc)
+                        if doc["score"] > max_similarity:
+                            max_similarity = doc["score"]
+
+                # Merge infra/behavior/regional/visual into threat_intel_matches for risk scoring
+                for coll_name in ("infrastructure_intel", "behavior_metrics", "regional_threats", "visual_intelligence"):
+                    for doc in multi_results.get(coll_name, []):
+                        score = doc.get("vectorScore") or doc.get("searchScore", 0.0)
+                        doc["score"] = score
+                        doc["_sourceCollection"] = coll_name
+                        if len(threat_intel_matches) < 10:
+                            threat_intel_matches.append(doc)
+                            if score > max_intel_similarity:
+                                max_intel_similarity = score
+
+            except Exception as e:
+                logger.warning("Multi-collection search failed: %s", e)
+
+        # 4c. Atlas lexical enrichment (threat-intel focused)
         if self._atlas_search and atlas_enabled and ti_enabled:
             try:
                 atlas_query = " ".join(filter(None, [
@@ -269,6 +472,14 @@ class URLAnalysisService:
             max_atlas_score=atlas_signals["maxSearchScore"],
         )
         classification = classify_threat(risk, thresholds=thresholds)
+        classification = self._refine_classification(
+            classification=classification,
+            risk=risk,
+            thresholds=thresholds,
+            features=features,
+            threat_intel_matches=threat_intel_matches,
+            page_content=page_content,
+        )
 
         authority = authoritative_record
         risk_alignment_note = None
@@ -332,6 +543,7 @@ class URLAnalysisService:
             status=status_val,
             scan_count=scan_count,
         )
+        summary_text = self._append_page_content(summary_text, page_content)
 
         # 7. Build record
         record = {
@@ -469,11 +681,15 @@ class URLAnalysisService:
             "similarThreats": similar_threats,
             "threatIntelMatches": threat_intel_matches,
             "atlasSearchSignals": atlas_signals,
+            "multiCollectionResults": {
+                k: len(v) for k, v in multi_results.items()
+            } if multi_results else {},
             "campaign": campaign,
             "recommendedAction": recommended_action(risk, thresholds=thresholds),
             "riskLevel": risk_level(risk, thresholds=thresholds),
             "riskBreakdown": risk_breakdown,
             "vectorSearchMs": vector_search_ms,
+            "multiCollectionSearchMs": multi_search_ms,
             "analysisSummary": self._build_analysis_summary(
                 url, features, classification, risk, record["status"],
                 similar_threats, threat_intel_matches,
@@ -506,18 +722,28 @@ class URLAnalysisService:
     @staticmethod
     def _slim_intel(doc):
         """Minimal representation of a threat-intel match."""
+        feed_metadata = doc.get("feedMetadata", {})
+        feed_name = URLAnalysisService._intel_feed_name(doc)
+        
+        # Use summaryText as fallback for description (threat_signals use summaryText)
+        description = doc.get("description") or doc.get("summaryText", "")
+        
+        # Clamp score to [0, 1] range to prevent >100% display
+        score = doc.get("score", 0)
+        score = min(1.0, max(0, score))
+        
         return {
             "_id": str(doc.get("_id", "")),
             "url": doc.get("url"),
-            "feedName": doc.get("feedName") or doc.get("source", ""),
-            "threatType": doc.get("threatClassification") or doc.get("threatType"),
-            "description": doc.get("description"),
-            "score": doc.get("score"),
+            "feedName": feed_name,
+            "threatType": URLAnalysisService._intel_pattern_type(doc),
+            "description": description,
+            "score": score,
             "reportedDate": str(doc.get("submissionDate") or doc.get("reportedDate", "")),
             "attackCategory": doc.get("attackCategory", ""),
             "targetDomain": doc.get("targetDomain", ""),
-            "severity": doc.get("severity", ""),
-            "confidence": doc.get("confidence"),
+            "severity": feed_metadata.get("severity") or doc.get("severity", ""),
+            "confidence": feed_metadata.get("confidence") or doc.get("confidence"),
         }
 
     def _build_analysis_summary(
@@ -720,9 +946,9 @@ class URLAnalysisService:
         _intel_min = r_thresholds.get("threatIntelMinScore", 0.85)
         high_conf_intel = [t for t in threat_intel_matches if t.get("score", 0) >= _intel_min]
         if high_conf_intel:
-            feeds = list(set(t.get("feedName", "Unknown") for t in high_conf_intel[:3]))
-            types = list(set(t.get("threatType", "unknown") for t in high_conf_intel))
-            top_score = high_conf_intel[0].get("score", 0)
+            feeds = list(set(self._intel_feed_name(t) for t in high_conf_intel[:3]))
+            types = list(set(self._intel_pattern_type(t) for t in high_conf_intel))
+            top_score = min(1.0, high_conf_intel[0].get("score", 0))  # Clamp to [0,1] range
             intel_docs = [self._slim_intel(t) for t in high_conf_intel]
             reasons.append(_reason(
                 f"📡 THREAT INTEL — Similar to {len(high_conf_intel)} "
@@ -811,7 +1037,7 @@ class URLAnalysisService:
         # Invalidate cache for this URL on status change
         url_doc = await self._url_repo.find_by_id(url_id)
         if url_doc:
-            self._cache.invalidate(url_doc.get("url", ""))
+            self._cache.invalidate_url(url_doc.get("url", ""))
         _status_labels = {
             "blocked": "Blocked by authorities",
             "under_review": "Flagged for review by authorities",

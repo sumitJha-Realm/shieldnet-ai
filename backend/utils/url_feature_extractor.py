@@ -822,3 +822,125 @@ def recommended_action(score: float, thresholds: dict | None = None) -> str:
         return "review"
     else:
         return "allow"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Multi-collection helpers (25 UC coverage)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Hindi/Tamil/Bengali character ranges for language detection
+_DEVANAGARI = re.compile(r"[\u0900-\u097F]")   # Hindi
+_TAMIL = re.compile(r"[\u0B80-\u0BFF]")
+_BENGALI = re.compile(r"[\u0980-\u09FF]")
+_TELUGU = re.compile(r"[\u0C00-\u0C7F]")
+_KANNADA = re.compile(r"[\u0C80-\u0CFF]")
+
+
+def detect_language(text: str) -> str:
+    """Simple script-based language detection for Indian languages.
+    Returns ISO 639-1 code. Falls back to 'en' if no non-Latin script detected."""
+    if not text:
+        return "en"
+    if _DEVANAGARI.search(text):
+        return "hi"
+    if _TAMIL.search(text):
+        return "ta"
+    if _BENGALI.search(text):
+        return "bn"
+    if _TELUGU.search(text):
+        return "te"
+    if _KANNADA.search(text):
+        return "kn"
+    return "en"
+
+
+def build_scan_signals(url: str, features: dict, page_content: str = "") -> dict:
+    """Determine which collections need to be queried based on available signals.
+
+    Returns a dict compatible with ScanSignals model fields.
+    """
+    hf = features.get("hostingFlags", {})
+    us = features.get("urlStructure", {})
+
+    # Infrastructure signals: we always have some from feature extraction
+    has_infra = bool(
+        hf.get("hostingProvider")
+        or us.get("hasSuspiciousTld")
+        or features.get("dnsStatus") in ("suspended", "parked")
+        or hf.get("domainAgeDays", 9999) < 30
+    )
+
+    # Language detection from page content or URL itself
+    detected_lang = detect_language(page_content or url)
+
+    # Screenshot availability (in POC: always False unless enricher provides it)
+    has_screenshot = bool(features.get("screenshot_b64"))
+
+    # Traffic anomaly (in POC: triggered by specific patterns)
+    has_traffic = bool(features.get("trafficAnomaly"))
+
+    # Dark web indicators
+    domain = features.get("domain", "")
+    has_dark_web = domain.endswith(".onion") or "darknet" in url.lower() or "dark-web" in url.lower()
+
+    # QR source
+    has_qr = "qr" in url.lower() or features.get("queryParams", {}).get("ref", [""])[0].startswith("qr_")
+
+    return {
+        "has_infra_data": has_infra,
+        "has_screenshot": has_screenshot,
+        "has_traffic_anomaly": has_traffic,
+        "detected_language": detected_lang,
+        "has_dark_web_indicators": has_dark_web,
+        "has_qr_source": has_qr,
+    }
+
+
+def build_regional_text(url: str, page_content: str, features: dict) -> str:
+    """Build text for voyage-multilingual-2 embedding.
+    Preserves original non-English text for proper multilingual encoding."""
+    domain = features.get("domain", "")
+    brand = features.get("brandImpersonation", {})
+    parts = [
+        page_content[:1000] if page_content else "",  # preserve original language
+        f"URL: {url}",
+        f"domain: {domain}",
+    ]
+    if brand and brand.get("closest_brand"):
+        parts.append(f"targets brand: {brand['closest_brand']}")
+    return " ".join(filter(None, parts))
+
+
+def build_visual_description(url: str, features: dict) -> str:
+    """Build text description for voyage-multimodal-3 embedding.
+    Used when we have a screenshot or want to match against visual baselines."""
+    domain = features.get("domain", "")
+    brand = features.get("brandImpersonation", {})
+    parts = [
+        f"Webpage screenshot of {domain}",
+        f"URL: {url}",
+    ]
+    if brand and brand.get("closest_brand"):
+        parts.append(f"appears to impersonate {brand['closest_brand']} login page")
+    payload_types = features.get("payloadTypes", [])
+    if "credential_harvest" in payload_types:
+        parts.append("contains login form with username and password fields")
+    return ". ".join(parts)
+
+
+def parse_qr_url(raw_input: str) -> dict:
+    """Parse URL that may be a deep link or UPI intent (UC 23)."""
+    if raw_input.startswith("upi://"):
+        from urllib.parse import parse_qs as _pqs, urlparse as _up
+        parsed = _up(raw_input)
+        params = _pqs(parsed.query, keep_blank_values=True)
+        return {
+            "type": "upi_intent",
+            "vpa": params.get("pa", [None])[0],
+            "amount": params.get("am", [None])[0],
+            "name": params.get("pn", [None])[0],
+        }
+    if "://" in raw_input and raw_input.split("://")[0] not in ("http", "https", "ftp"):
+        scheme = raw_input.split("://")[0]
+        return {"type": "deep_link", "scheme": scheme, "url": raw_input}
+    return {"type": "standard_url", "url": raw_input}

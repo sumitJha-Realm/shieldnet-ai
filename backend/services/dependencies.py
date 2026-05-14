@@ -12,6 +12,7 @@ from repositories.impl.vector_search_repository import VectorSearchRepository
 from repositories.impl.scan_rules_repository import ScanRulesRepository
 from repositories.impl.url_graph_repository import URLGraphRepository
 from repositories.impl.campaign_repository import CampaignRepository
+from repositories.impl.multi_collection_repository import MultiCollectionRepository
 from services.agentic_analysis_service import AgenticAnalysisService
 from services.campaign_detection_service import CampaignDetectionService
 from services.url_analysis_service import URLAnalysisService
@@ -94,6 +95,16 @@ def get_scan_rules_repository() -> ScanRulesRepository:
     return _scan_rules_repo
 
 
+_multi_collection_repo: MultiCollectionRepository | None = None
+
+
+def get_multi_collection_repository() -> MultiCollectionRepository:
+    global _multi_collection_repo
+    if _multi_collection_repo is None:
+        _multi_collection_repo = MultiCollectionRepository(get_database())
+    return _multi_collection_repo
+
+
 _campaign_repo: CampaignRepository | None = None
 
 
@@ -163,6 +174,7 @@ def get_url_analysis_service() -> URLAnalysisService:
             url_repo=get_url_repository(),
             vector_search_service=get_vector_search_service(),
             atlas_search_service=get_atlas_search_service(),
+            multi_collection_repo=get_multi_collection_repository(),
             cache=get_waterfall_cache(),
             rules_repo=get_scan_rules_repository(),
             graph_service=get_url_graph_service(),

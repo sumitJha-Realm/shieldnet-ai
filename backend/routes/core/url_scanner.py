@@ -16,7 +16,7 @@ async def scan_url(
 ):
     """Submit a URL for real-time analysis."""
     try:
-        result = await service.scan_url(request.url)
+        result = await service.scan_url(request.url, page_content=request.pageContent)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -29,7 +29,7 @@ async def scan_url_agentic(
 ):
     """Submit a URL for deterministic scan plus Foundry reasoning."""
     try:
-        return await service.scan_url(request.url)
+        return await service.scan_url(request.url, page_content=request.pageContent)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
