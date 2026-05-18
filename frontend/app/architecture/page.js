@@ -1501,18 +1501,104 @@ post-filter: keep docType == "threat_intel"`}</pre>
             </h3>
             <div style={{ display: 'grid', gap: 10 }}>
               {[
-                ['urls', 'Primary unified store for scanner records + threat intel docs', 'Source: URL Scanner API, reset/seed scripts, threat-intel seed script'],
-                ['campaigns', 'Clustered attack campaigns and aggregate stats (urlCount, avgRiskScore, lastSeen)', 'Source: campaign detection service during scan and seeding scripts'],
-                ['url_edges', 'Graph relationships between related URLs for traversal/connected evidence', 'Source: URL graph service after scan similarity results'],
-                ['scan_rules', 'Active threshold weights, module toggles, and policy defaults', 'Source: default rules on first run + scan rules admin routes'],
-                ['threat_logs', 'Operational/audit log history for analytics and review timelines', 'Source: seed/demo scripts and threat management flows'],
-              ].map(([name, purpose, source]) => (
-                <div key={name} style={{ display: 'grid', gridTemplateColumns: '150px 1fr 1fr', gap: 12, background: '#F9FAFB', border: '1px solid #E8EDEB', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
+                ['urls', 'Unified store for scanner records (docType=scan) + threat intel (docType=threat_intel). Vector + Atlas Search.', 'Embedding: voyage-4-large (1024-dim) | Index: url_vector_index, url_search_index'],
+                ['threat_signals', 'Core phishing/malware/C2/campaign/QR/UPI/supply-chain threat patterns. Vector Search. UC 1,3,4,7,8,11,12,13,14,19,22,23.', 'Embedding: voyage-4-large (1024-dim) | Index: vs_threat_signals'],
+                ['infrastructure_intel', 'DNS anomalies, TLS cert metadata, redirect chains, fast-flux, hosting/ASN/geo data. Atlas Search only. UC 2,5,16,17,22.', 'No embedding | Index: infra_search_index (compound text + range)'],
+                ['regional_threats', 'Multilingual scam patterns (Hindi, Tamil, Bengali, Telugu, Kannada). Vector Search. UC 18, 24.', 'Embedding: voyage-4-large multilingual (1024-dim) | Index: vs_regional'],
+                ['visual_intelligence', 'Visual baseline vs phishing-capture/watering-hole screenshots. Vector Search (conditional). UC 10, 11, 21.', 'Embedding: voyage-multimodal-3.5 (1024-dim) | Index: vs_visual'],
+                ['behavior_metrics', 'Traffic anomaly, bot detection, request-rate and error-rate metrics. Atlas Search only. UC 9, 20, 25.', 'No embedding | Index: behavior_search_index (range/threshold)'],
+                ['campaigns', 'Clustered attack campaigns and aggregate stats (urlCount, avgRiskScore, lastSeen).', 'No embedding | Standard indexes'],
+                ['url_edges', 'Graph relationships between related URLs for traversal/connected evidence.', 'No embedding | Standard indexes'],
+                ['threat_logs', 'Operational/audit log history for analytics and review timelines.', 'No embedding | Standard indexes on urlId, timestamp, scanTier'],
+                ['scan_rules', 'Active threshold weights, module toggles, and policy defaults.', 'No embedding | Singleton document'],
+              ].map(([name, purpose, embedding]) => (
+                <div key={name} style={{ display: 'grid', gridTemplateColumns: '170px 1fr 1fr', gap: 12, background: '#F9FAFB', border: '1px solid #E8EDEB', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
                   <div style={{ fontWeight: 800, color: '#1a1c1e', fontFamily: 'monospace' }}>{name}</div>
-                  <div style={{ color: '#3D4F58' }}>{purpose}</div>
-                  <div style={{ color: '#3D4F58' }}>{source}</div>
+                  <div style={{ color: '#3D4F58', lineHeight: 1.45 }}>{purpose}</div>
+                  <div style={{ color: '#4B2B91', fontSize: 12, lineHeight: 1.45 }}>{embedding}</div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div style={card}>
+            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, color: '#1a1c1e' }}>
+              Multi-Collection Data Flow
+            </h3>
+            <div style={{ border: '1px solid #E8EDEB', borderRadius: 12, background: '#F9FAFB', padding: 14, marginBottom: 14 }}>
+              <div style={{ background: '#0F172A', borderRadius: 10, padding: 14, overflowX: 'auto' }}>
+                <pre style={{ margin: 0, fontSize: 12, color: '#D6E4FF', whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>{`URL Scan Request
+     │
+     ▼
+┌─────────────────┐
+│  L1 In-Memory   │──hit──▶ Return cached result
+│     Cache       │
+└────────┬────────┘
+         │ miss
+         ▼
+┌─────────────────┐
+│  L2 Database    │──hit──▶ Reuse stored embedding + re-score
+│  (urls coll)    │
+└────────┬────────┘
+         │ miss
+         ▼
+┌───────────────────────────────────────────────────────┐
+│  L3 Full Pipeline                                      │
+│                                                        │
+│  1. Feature extraction (domain, TLD, SSL, DGA,        │
+│     homoglyph, payload, structure)                     │
+│  2. Context enrichment (pageContent, language,         │
+│     QR/UPI parsing)                                    │
+│  3. Summary text build                                 │
+│  4. Embedding generation (voyage-4-large, 1024-dim)    │
+│  5. Multi-collection retrieval fan-out:                │
+│     ┌──────────────────────────────────────────────┐   │
+│     │ Vector Search (cosine similarity):           │   │
+│     │  • urls — unified scan + threat intel corpus │   │
+│     │  • threat_signals — always queried           │   │
+│     │  • regional_threats — if language != EN      │   │
+│     │  • visual_intelligence — if screenshot       │   │
+│     ├──────────────────────────────────────────────┤   │
+│     │ Atlas Search (text + range filtering):       │   │
+│     │  • infrastructure_intel — if infra signals   │   │
+│     │  • behavior_metrics — if traffic anomaly     │   │
+│     │  • urls (lexical enrichment) — threat intel  │   │
+│     └──────────────────────────────────────────────┘   │
+│  6. Risk scoring + classification                      │
+│  7. Status decision (blocked/review/allowed)           │
+│  8. Campaign detection + re-embedding                  │
+│  9. Persist to urls + graph linking                    │
+└───────────────────────────────────────────────────────┘`}</pre>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+              <div style={{ background: '#F3EEFF', border: '1px solid #CDBAF6', borderRadius: 10, padding: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#4B2B91', marginBottom: 6 }}>Vector Search Collections (4)</div>
+                <div style={{ fontSize: 12, color: '#3D4F58', lineHeight: 1.6 }}>
+                  <div><strong>urls</strong> — always queried (unified corpus)</div>
+                  <div><strong>threat_signals</strong> — always queried (threat patterns)</div>
+                  <div><strong>regional_threats</strong> — conditional (non-English language)</div>
+                  <div><strong>visual_intelligence</strong> — conditional (screenshot available)</div>
+                </div>
+              </div>
+              <div style={{ background: '#E3FCF7', border: '1px solid #A2E8DA', borderRadius: 10, padding: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#0F5132', marginBottom: 6 }}>Atlas Search Collections (3)</div>
+                <div style={{ fontSize: 12, color: '#3D4F58', lineHeight: 1.6 }}>
+                  <div><strong>urls</strong> — lexical enrichment (threat intel docs)</div>
+                  <div><strong>infrastructure_intel</strong> — conditional (infra signals)</div>
+                  <div><strong>behavior_metrics</strong> — conditional (traffic anomaly)</div>
+                </div>
+              </div>
+              <div style={{ background: '#FFF6E8', border: '1px solid #F0D6A2', borderRadius: 10, padding: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#6B4E13', marginBottom: 6 }}>Operational Collections (4)</div>
+                <div style={{ fontSize: 12, color: '#3D4F58', lineHeight: 1.6 }}>
+                  <div><strong>campaigns</strong> — attack cluster aggregation</div>
+                  <div><strong>url_edges</strong> — graph relationships</div>
+                  <div><strong>threat_logs</strong> — audit trail</div>
+                  <div><strong>scan_rules</strong> — scoring policy config</div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1522,7 +1608,7 @@ post-filter: keep docType == "threat_intel"`}</pre>
             </h3>
             <div style={{ display: 'grid', gap: 14 }}>
               <div style={{ border: '1px solid #E8EDEB', borderRadius: 10, padding: 12, background: '#FBFDFF' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#1a1c1e' }}>urls (scanner record)</div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#1a1c1e' }}>urls (scanner record — docType: scan)</div>
                 <pre style={{ margin: 0, fontSize: 12, color: '#12344D', whiteSpace: 'pre-wrap' }}>{`{
   "url": "https://secure-login-incometax.xyz/auth/verify",
   "domain": "secure-login-incometax.xyz",
@@ -1531,14 +1617,15 @@ post-filter: keep docType == "threat_intel"`}</pre>
   "riskScore": 86.4,
   "status": "blocked",
   "summaryText": "URL analysis ... threat classification phishing ...",
-  "embedding": [/* 1024-dim voyage-4 vector */],
+  "embedding": [/* 1024-dim voyage-4-large vector */],
   "campaignId": "campaign_001_tax_auth_2025",
-  "campaignName": "Tax Authority Phishing Campaign Q1 2025"
+  "hostingFlags": { "domainAgeDays": 12, "sslValid": false, "hostingProvider": "bulletproof-host.ru" },
+  "payloadTypes": ["credential_harvest", "open_redirect"]
 }`}</pre>
               </div>
 
               <div style={{ border: '1px solid #E8EDEB', borderRadius: 10, padding: 12, background: '#FCFAFF' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#1a1c1e' }}>urls (threat intel doc in same collection)</div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#1a1c1e' }}>urls (threat intel — docType: threat_intel)</div>
                 <pre style={{ margin: 0, fontSize: 12, color: '#4B2B91', whiteSpace: 'pre-wrap' }}>{`{
   "url": "https://nic.in/login?redirect=http://gov-login-verify.xyz/capture",
   "domain": "nic.in",
@@ -1547,54 +1634,115 @@ post-filter: keep docType == "threat_intel"`}</pre>
   "attackCategory": "open_redirect",
   "feedName": "CERT-IN_Feed",
   "summaryText": "Open redirect attack against nic.in ...",
-  "embedding": [/* 1024-dim voyage-4 vector */]
+  "embedding": [/* 1024-dim voyage-4-large vector */]
+}`}</pre>
+              </div>
+
+              <div style={{ border: '1px solid #E8EDEB', borderRadius: 10, padding: 12, background: '#F3EEFF' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#4B2B91' }}>threat_signals (vector search — voyage-4-large)</div>
+                <pre style={{ margin: 0, fontSize: 12, color: '#4B2B91', whiteSpace: 'pre-wrap' }}>{`{
+  "url": "https://sbi-secure-login.com/verify",
+  "domain": "sbi-secure-login.com",
+  "docType": "threat_signal",
+  "attackCategory": "typosquatting",
+  "threatClassification": "phishing",
+  "summaryText": "Typosquatting domain impersonating SBI online banking ...",
+  "embedding": [/* 1024-dim voyage-4-large vector */],
+  "riskScore": 88.5,
+  "indicators": { "brandDistance": 2, "hasLoginPath": true }
+}`}</pre>
+              </div>
+
+              <div style={{ border: '1px solid #E8EDEB', borderRadius: 10, padding: 12, background: '#E3FCF7' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#0F5132' }}>infrastructure_intel (Atlas Search only — no embedding)</div>
+                <pre style={{ margin: 0, fontSize: 12, color: '#185F4A', whiteSpace: 'pre-wrap' }}>{`{
+  "domain": "fast-flux-botnet.top",
+  "ip": "185.220.101.42",
+  "asn": "AS9009",
+  "status": "fast-flux",
+  "ipRotationCount24h": 47,
+  "ttlSeconds": 60,
+  "tlsIssuer": "Let's Encrypt",
+  "tlsSelfSigned": false,
+  "tlsSanMismatch": true,
+  "redirectChainLength": 4,
+  "geoCountry": "RU"
+}`}</pre>
+              </div>
+
+              <div style={{ border: '1px solid #D9E7F8', borderRadius: 10, padding: 12, background: '#F8FBFF' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#12344D' }}>regional_threats (vector search — voyage-4-large multilingual)</div>
+                <pre style={{ margin: 0, fontSize: 12, color: '#12344D', whiteSpace: 'pre-wrap' }}>{`{
+  "url": "https://sbi-kyc-update.in/verify",
+  "domain": "sbi-kyc-update.in",
+  "language": "hi",
+  "originalText": "आपका SBI अकाउंट ब्लॉक हो गया है ...",
+  "translatedText": "Your SBI account has been blocked ...",
+  "summaryText": "Hindi banking scam targeting SBI customers ...",
+  "embedding": [/* 1024-dim voyage-4-large multilingual vector */],
+  "attackCategory": "credential_harvesting",
+  "targetBrand": "SBI",
+  "region": "north_india"
+}`}</pre>
+              </div>
+
+              <div style={{ border: '1px solid #E8EDEB', borderRadius: 10, padding: 12, background: '#FFFBF5' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#6B4E13' }}>visual_intelligence (vector search — voyage-multimodal-3.5)</div>
+                <pre style={{ margin: 0, fontSize: 12, color: '#6B4E13', whiteSpace: 'pre-wrap' }}>{`{
+  "url": "https://sbi-secure-login.com/verify",
+  "domain": "sbi-secure-login.com",
+  "type": "phishing_capture",
+  "brandName": "SBI",
+  "description": "Login page clone with SBI branding, credential form ...",
+  "embedding": [/* 1024-dim voyage-multimodal-3.5 vector */],
+  "similarityToBaseline": 0.91,
+  "screenshotHash": "a4f8c2..."
+}`}</pre>
+              </div>
+
+              <div style={{ border: '1px solid #A2E8DA', borderRadius: 10, padding: 12, background: '#EAFBF2' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#1C6A43' }}>behavior_metrics (Atlas Search only — no embedding)</div>
+                <pre style={{ margin: 0, fontSize: 12, color: '#1C6A43', whiteSpace: 'pre-wrap' }}>{`{
+  "domain": "task-sync-control-panel.top",
+  "requestsPerMinute": 847.3,
+  "uniqueIps": 12,
+  "errorRate5xx": 0.42,
+  "headerEntropy": 0.12,
+  "avgTimeBetweenRequests": 71.0,
+  "isAnomaly": true,
+  "anomalyType": "credential_stuffing",
+  "zScoreRpm": 4.8,
+  "zScoreErrorRate": 3.2
 }`}</pre>
               </div>
 
               <div style={{ border: '1px solid #E8EDEB', borderRadius: 10, padding: 12, background: '#F6FBF8' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#1a1c1e' }}>campaigns</div>
-                <pre style={{ margin: 0, fontSize: 12, color: '#1C6A43', whiteSpace: 'pre-wrap' }}>{`{
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#1a1c1e' }}>campaigns / url_edges / scan_rules / threat_logs</div>
+                <pre style={{ margin: 0, fontSize: 12, color: '#3D4F58', whiteSpace: 'pre-wrap' }}>{`// campaigns
+{
   "campaignId": "campaign_001_tax_auth_2025",
   "name": "Tax Authority Phishing Campaign Q1 2025",
   "attackCategory": "credential_harvest",
   "status": "active",
   "urlCount": 128,
-  "avgRiskScore": 83.7,
-  "domains": ["incometax.gov.in", "gst.gov.in"],
-  "lastSeen": "2026-04-30T10:21:00Z"
-}`}</pre>
-              </div>
+  "avgRiskScore": 83.7
+}
 
-              <div style={{ border: '1px solid #E8EDEB', borderRadius: 10, padding: 12, background: '#FFF9F1' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#1a1c1e' }}>url_edges</div>
-                <pre style={{ margin: 0, fontSize: 12, color: '#6B4E13', whiteSpace: 'pre-wrap' }}>{`{
+// url_edges
+{
   "fromUrl": "https://secure-login-incometax.xyz/auth/verify",
   "toUrl": "https://gst-auth-update.top/kyc/verify",
   "strength": 0.79,
-  "factors": [
-    { "name": "vector_similarity", "value": 0.84 },
-    { "name": "shared_attack_category", "value": 0.74 }
-  ]
-}`}</pre>
-              </div>
-
-              <div style={{ border: '1px solid #E8EDEB', borderRadius: 10, padding: 12, background: '#F5F6F7' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#1a1c1e' }}>scan_rules / threat_logs</div>
-                <pre style={{ margin: 0, fontSize: 12, color: '#3D4F58', whiteSpace: 'pre-wrap' }}>{`// scan_rules (singleton)
-{
-  "_id": "active_rules",
-  "thresholds": { "block": 70, "review": 45 },
-  "weights": { "vector": 0.30, "payload": 0.20, "dga": 0.20 }
+  "factors": [{ "name": "vector_similarity", "value": 0.84 }]
 }
 
-// threat_logs (audit)
+// threat_logs
 {
   "urlId": "...",
-  "timestamp": "2026-04-30T10:23:00Z",
   "action": "blocked",
   "scanTier": "L3_FULL_PIPELINE",
-  "aiConfidence": 0.94,
-  "riskScore": 86.4
+  "riskScore": 86.4,
+  "triggerReasons": ["dga", "vector_match", "brand_impersonation"]
 }`}</pre>
               </div>
             </div>
@@ -1606,11 +1754,12 @@ post-filter: keep docType == "threat_intel"`}</pre>
             </h3>
             <div style={{ display: 'grid', gap: 10 }}>
               {[
-                ['URL Scanner request', 'Incoming URL is enriched, scored, embedded, and upserted into urls as docType=scan.'],
-                ['Threat intel seeding', 'Threat feed-style records are generated and stored in urls as docType=threat_intel for shared search/vector retrieval.'],
-                ['Campaign detection', 'Vector neighbors + attack category + time-window logic create/update campaigns and tag matched URLs.'],
+                ['URL Scanner request', 'Incoming URL is enriched, scored, embedded (voyage-4-large), and upserted into urls as docType=scan.'],
+                ['Threat intel seeding', 'Threat feed-style records are embedded and stored in urls as docType=threat_intel for shared vector/search retrieval.'],
+                ['Multi-collection seeding', 'seed_multi_collections.py populates threat_signals, infrastructure_intel, regional_threats, visual_intelligence, and behavior_metrics with respective embedding models.'],
+                ['Campaign detection', 'Vector neighbors + attack category + time-window logic create/update campaigns and tag matched URLs with campaign-enriched re-embeddings.'],
                 ['Graph linking', 'Similarity evidence creates url_edges so related threats can be traversed as a connected graph.'],
-                ['Rules and audit', 'scan_rules controls scoring behavior; threat_logs keeps operational action history for review.'],
+                ['Rules and audit', 'scan_rules controls scoring behavior; threat_logs keeps operational action history with scan tier and trigger reasons.'],
               ].map(([title, detail]) => (
                 <div key={title} style={{ background: '#F5F6F7', border: '1px solid #E8EDEB', borderRadius: 10, padding: '10px 12px' }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1c1e', marginBottom: 4 }}>{title}</div>
@@ -1626,10 +1775,16 @@ post-filter: keep docType == "threat_intel"`}</pre>
             </h3>
             <div style={{ display: 'grid', gap: 10, fontSize: 13, color: '#3D4F58', lineHeight: 1.55 }}>
               <div>
-                <strong style={{ color: '#1a1c1e' }}>Base embedding input:</strong> Scanner builds <strong>summaryText</strong> from URL metadata + threat signals (domain age, DNS/hosting flags, structural risk, DGA/homoglyph signals, classification, risk score, payload types).
+                <strong style={{ color: '#1a1c1e' }}>Primary model:</strong> <strong>voyage-4-large</strong> (1024-dim) via <strong>ai.mongodb.com/v1/embeddings</strong> — used for urls, threat_signals, and regional_threats collections.
               </div>
               <div>
-                <strong style={{ color: '#1a1c1e' }}>Model/runtime:</strong> Voyage API at <strong>ai.mongodb.com/v1/embeddings</strong> using <strong>voyage-4</strong>, producing a <strong>1024-dim</strong> vector stored in <strong>embedding</strong>.
+                <strong style={{ color: '#1a1c1e' }}>Multimodal model:</strong> <strong>voyage-multimodal-3.5</strong> (1024-dim) via <strong>api.voyageai.com/v1/embeddings</strong> — used for visual_intelligence collection (screenshot/image comparisons).
+              </div>
+              <div>
+                <strong style={{ color: '#1a1c1e' }}>No embedding:</strong> infrastructure_intel and behavior_metrics use Atlas Search (text + range queries) only — deterministic structured data doesn&apos;t benefit from semantic similarity.
+              </div>
+              <div>
+                <strong style={{ color: '#1a1c1e' }}>Base embedding input:</strong> Scanner builds <strong>summaryText</strong> from URL metadata + threat signals (domain age, DNS/hosting flags, structural risk, DGA/homoglyph signals, classification, risk score, payload types).
               </div>
               <div>
                 <strong style={{ color: '#1a1c1e' }}>Unified retrieval design:</strong> Both scan docs and threat-intel docs live in <strong>urls</strong> and share the same embedding field, enabling one vector query to retrieve both types.
@@ -1638,7 +1793,7 @@ post-filter: keep docType == "threat_intel"`}</pre>
                 <strong style={{ color: '#1a1c1e' }}>Campaign re-embedding:</strong> After campaign detection, summaryText is rewritten with campaign context and re-embedded so future scans can resolve campaign semantics in a single query.
               </div>
               <div>
-                <strong style={{ color: '#1a1c1e' }}>Why summary-based vectors:</strong> Embedding a compact natural-language summary of URL + metadata performs better than embedding only raw URL text for semantic threat similarity.
+                <strong style={{ color: '#1a1c1e' }}>Conditional paths:</strong> Regional embedding is generated only when detected language is non-English. Visual embedding is generated only when screenshot signal is available.
               </div>
             </div>
           </div>
@@ -1659,14 +1814,16 @@ post-filter: keep docType == "threat_intel"`}</pre>
 
             <div style={{ display: 'grid', gap: 10 }}>
               {[
-                ['Embedding model (runtime default)', 'voyage-4', 'Used by embedding service for URL and summary vectors.'],
-                ['Embedding endpoint', 'https://ai.mongodb.com/v1/embeddings', 'Called with VOYAGE_AI_API_KEY for single and batch embedding generation.'],
+                ['Embedding model (primary)', 'voyage-4-large', 'Used for urls, threat_signals, and regional_threats embeddings (1024-dim).'],
+                ['Embedding model (multimodal)', 'voyage-multimodal-3.5', 'Used for visual_intelligence collection embeddings (1024-dim).'],
+                ['Embedding endpoint (MongoDB)', 'https://ai.mongodb.com/v1/embeddings', 'Called with VOYAGE_AI_API_KEY for text embedding generation.'],
+                ['Embedding endpoint (Voyage direct)', 'https://api.voyageai.com/v1/embeddings', 'Called with VOYAGE_DIRECT_API_KEY for multimodal embeddings.'],
                 ['LLM model (runtime default)', 'gpt-5.4', 'Used in Foundry-backed agentic step to produce decision, confidence, reasoning, and score adjustment.'],
                 ['LLM endpoint', 'GROVE_FOUNDRY_CHAT_URL', 'Foundry chat completions endpoint for classifier workflow.'],
-                ['Atlas Search index', 'url_search_index', 'Lexical and fuzzy retrieval on url, domain, and summaryText.'],
-                ['Vector Search index', 'url_vector_index', 'Semantic nearest-neighbor retrieval on embedding vectors.'],
+                ['Vector Search indexes', 'url_vector_index, vs_threat_signals, vs_regional, vs_visual', 'Cosine similarity on 1024-dim vectors with pre-filters.'],
+                ['Atlas Search indexes', 'url_search_index, infra_search_index, behavior_search_index', 'Lexical, fuzzy, and range-based retrieval across 3 collections.'],
                 ['Hybrid retrieval', '$rankFusion', 'Weighted fusion of Atlas lexical and Vector semantic results.'],
-                ['Vector dimensions / similarity', '1024 / cosine', 'Configured for semantic URL similarity retrieval in Atlas vector index.'],
+                ['Vector dimensions / similarity', '1024 / cosine', 'All vector indexes use consistent 1024-dim cosine configuration.'],
               ].map(([name, value, purpose]) => (
                 <div key={name} style={{ display: 'grid', gridTemplateColumns: '240px 180px 1fr', gap: 12, background: '#F9FAFB', border: '1px solid #E8EDEB', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
                   <div style={{ fontWeight: 700, color: '#3D4F58' }}>{name}</div>

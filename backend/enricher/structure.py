@@ -7,7 +7,11 @@ import math
 import re
 from urllib.parse import parse_qs, unquote, urlparse
 
-from Levenshtein import distance as levenshtein_distance
+try:
+    from Levenshtein import distance as levenshtein_distance
+except ModuleNotFoundError:  # python-Levenshtein C ext unavailable (e.g. Python 3.14)
+    from rapidfuzz.distance import Levenshtein as _Lev
+    levenshtein_distance = _Lev.distance
 
 from enricher.config import BRAND_DOMAINS, SUSPICIOUS_KEYWORDS
 from enricher.models import BrandImpersonation, URLStructure

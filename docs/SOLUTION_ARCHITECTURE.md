@@ -80,73 +80,108 @@ This section explains the full URL scan flow in plain sequence.
 
 ## Collection-by-Collection Search and Embedding Logic
 
-This section explains how each collection is queried, and where embeddings are used.
+This section explains how each collection is queried, where embeddings are used, and which seed scripts populate them.
 
-### 1) urls and threat corpus
+### 1) urls (unified threat corpus)
 - What it stores:
-	- Historical scan records and threat-intel style records.
+	- Historical scan records (`docType: "scan"`) and threat-intel entries (`docType: "threat_intel"`).
+- Seed script: `scripts/seed_data.py` (220 scan records + 50 intel feeds).
 - Search method:
-	- Vector Search for semantic nearest-neighbor threat matching.
-	- Search enrichment for text-driven threat-intel context.
-- Embedding behavior:
-	- Summary text embedding is generated for scans.
-	- Reused from L2 when available for faster repeat scans.
+	- Vector Search (`url_vector_index`) for semantic nearest-neighbor threat matching.
+	- Atlas Search (`url_search_index`) for text-driven lexical enrichment.
+- Embedding:
+	- Model: `voyage-4-large` (1024 dimensions) via MongoDB AI endpoint.
+	- Summary text embedding generated for every scan and intel record.
+	- Reused from L2 database cache when available for faster repeat scans.
+	- Campaign-enriched re-embedding via `scripts/backfill_campaign_embeddings.py`.
 
 ### 2) threat_signals
 - What it stores:
-	- Core phishing/malware/c2/campaign threat examples.
+	- Core phishing/malware/C2/campaign/supply-chain/QR-phishing/UPI-fraud threat examples.
+	- Covers UC 1,3,4,7,8,11,12,13,14,19,22,23.
+- Seed script: `scripts/seed_multi_collections.py`.
 - Search method:
-	- Vector Search.
-- Embedding behavior:
-	- Uses threat-text embeddings to compare new URL summaries with known threat patterns.
+	- Vector Search (`vs_threat_signals` index).
+	- Pre-filters: `attackCategory`, `threatClassification`, `source`.
+- Embedding:
+	- Model: `voyage-4-large` (1024 dimensions).
+	- Every document embedded on ingestion.
 
 ### 3) regional_threats
 - What it stores:
-	- Regional-language scam patterns (Hindi, Tamil, Bengali, etc.).
+	- Regional-language scam patterns (Hindi, Tamil, Bengali, Telugu, Kannada).
+	- Covers UC 18, 24.
+- Seed script: `scripts/seed_multi_collections.py`.
 - Search method:
-	- Vector Search (multilingual).
-- Embedding behavior:
-	- Regional embedding path is used when detected language is non-English (usually from pageContent).
+	- Vector Search (`vs_regional` index, multilingual).
+	- Pre-filters: `language`, `region`.
+- Embedding:
+	- Model: `voyage-4-large` (1024 dimensions, multilingual path).
+	- Embeds combined `originalText` + `translatedText` for cross-language retrieval.
+	- Conditional: only queried when detected language is non-English.
 
 ### 4) visual_intelligence
 - What it stores:
-	- Visual baseline vs impersonation-oriented descriptors.
+	- Visual baseline screenshots vs phishing-capture/watering-hole diffs.
+	- Covers UC 10, 11, 21.
+- Seed script: `scripts/seed_multi_collections.py`.
 - Search method:
-	- Vector Search (conditional).
-- Embedding behavior:
-	- Visual-description embedding path is used only when visual/screenshot signal is available.
+	- Vector Search (`vs_visual` index, conditional).
+	- Pre-filters: `type`, `brandName`.
+- Embedding:
+	- Model: `voyage-multimodal-3.5` (1024 dimensions) via Voyage direct API.
+	- Falls back to `voyage-4-large` text embedding when multimodal API unavailable.
+	- Conditional: only queried when screenshot/visual signal is available.
 
 ### 5) infrastructure_intel
 - What it stores:
-	- DNS, TLS, redirect-chain, hosting, fast-flux style infrastructure indicators.
+	- DNS anomalies, TLS certificate metadata, redirect chains, fast-flux indicators, hosting/ASN/geo data.
+	- Covers UC 2, 5, 16, 17, 22.
+- Seed script: `scripts/seed_multi_collections.py`.
 - Search method:
-	- Search (text + range style filtering).
-- Embedding behavior:
-	- No embedding required for this collection query path.
+	- Atlas Search (`infra_search_index`) — compound text + range filtering.
+	- Fields indexed: `domain`, `asn`, `asnName`, `hostingProvider`, `status`, `tlsIssuer`, `geoCountry`, `resolvedIps`, `redirectDomains`, `ipRotationCount24h`, `ttlSeconds`, `tlsValidDays`, `redirectChainLength`.
+- Embedding:
+	- None. Deterministic structured queries only.
 
 ### 6) behavior_metrics
 - What it stores:
-	- Request-rate, error-rate, and anomaly metrics (credential stuffing/scraping/spikes).
+	- Request-rate, error-rate, bot indicators, and anomaly metrics.
+	- Covers UC 9, 20, 25.
+- Seed script: `scripts/seed_multi_collections.py`.
 - Search method:
-	- Search (range/threshold-driven retrieval).
-- Embedding behavior:
-	- No embedding required for this collection query path.
+	- Atlas Search (`behavior_search_index`) — range/threshold-driven retrieval.
+	- Fields indexed: `domain`, `anomalyType`, `isAnomaly`, `requestsPerMinute`, `errorRate4xx`, `errorRate5xx`, `headerEntropy`, `avgTimeBetweenRequests`, `zScoreRpm`, `zScoreErrorRate`, `uniqueIps`.
+- Embedding:
+	- None. Threshold-based anomaly detection only.
+
+### 7) threat_logs
+- What it stores:
+	- Audit trail of threat actions (blocked, allowed, flagged) with scan metadata.
+- Seed script: `scripts/seed_data.py` (500 records).
+- Search method:
+	- Standard MongoDB indexes on `urlId`, `timestamp`, `scanTier`, `threatClassification`.
+- Embedding:
+	- None. Operational audit data only.
 
 ### Practical summary
-- Vector Search is used where semantic similarity is needed (threat_signals, regional_threats, visual_intelligence, and unified threat corpus).
-- Search is used where structured text/range constraints are stronger (infrastructure_intel, behavior_metrics, and lexical enrichment).
-- Embeddings are generated from scan summary text and conditionally from regional/visual context when those signals are present.
+- Vector Search is used where semantic similarity is needed: `urls`, `threat_signals`, `regional_threats`, `visual_intelligence`.
+- Atlas Search is used where structured text/range constraints are stronger: `infrastructure_intel`, `behavior_metrics`, and lexical enrichment on `urls`.
+- Standard indexes serve operational queries: `threat_logs`.
+- All vector embeddings are 1024-dimensional via Voyage AI (`voyage-4-large` or `voyage-multimodal-3.5`).
+- Embedding generation requires `VOYAGE_AI_API_KEY` environment variable; records are inserted without embeddings when unavailable.
 
 ## Collections and Query Modes
 
-| Collection | Query Mode | Purpose |
-|---|---|---|
-| urls and threat corpus | Vector | Similar known threats and historical scan evidence |
-| threat_signals | Vector | Typosquat, phishing, malware, C2, campaign-style signals |
-| regional_threats | Vector (multilingual) | Hindi, Tamil, Bengali and regional social engineering patterns |
-| visual_intelligence | Vector (conditional) | Baseline vs impersonation or watering-hole style visual semantics |
-| infrastructure_intel | Search | DNS, TLS anomalies, redirect chains, fast-flux and hosting indicators |
-| behavior_metrics | Search | Request-rate and anomaly metrics (credential stuffing, scraping, spikes) |
+| Collection | Query Mode | Embedding Model | Dimensions | Purpose |
+|---|---|---|---|---|
+| urls | Vector + Atlas Search | voyage-4-large | 1024 | Unified scan records and threat intel corpus |
+| threat_signals | Vector | voyage-4-large | 1024 | Typosquat, phishing, malware, C2, campaign-style signals |
+| regional_threats | Vector (multilingual) | voyage-4-large | 1024 | Hindi, Tamil, Bengali regional social engineering patterns |
+| visual_intelligence | Vector (conditional) | voyage-multimodal-3.5 | 1024 | Baseline vs impersonation or watering-hole visual semantics |
+| infrastructure_intel | Atlas Search only | — | — | DNS, TLS anomalies, redirect chains, fast-flux, hosting |
+| behavior_metrics | Atlas Search only | — | — | Request-rate and anomaly metrics (credential stuffing, scraping) |
+| threat_logs | Standard indexes | — | — | Audit trail of scan actions and latency metrics |
 
 ## Use Case Test Matrix (UC 1-25)
 
