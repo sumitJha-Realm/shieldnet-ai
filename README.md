@@ -81,20 +81,37 @@ This installs FastAPI, Motor, Pydantic, httpx, dnspython, and all other backend 
 
 ### Step 4: Seed the Database
 
+Run **all three** seed scripts in order to populate all 10 collections:
+
 ```bash
 cd backend
+
+# Step 4a: Core collections (urls, threat_logs)
 poetry run python -m scripts.seed_data
+
+# Step 4b: Multi-collection threat data (threat_signals, infrastructure_intel, regional_threats, visual_intelligence, behavior_metrics)
+poetry run python -m scripts.seed_multi_collections
+
+# Step 4c: Scan rule reference examples (scan_rules)
+poetry run python -m scripts.seed_rule_examples
 ```
 
-This command populates your MongoDB Atlas database (`shieldnet-ai`) with:
+This populates your MongoDB Atlas database (`shieldnet-ai`) with all **10 collections**:
 
-| Collection | Records | Description |
-|---|---|---|
-| `urls` | 220+ | Sample malicious & benign URL records with risk scores |
-| `threat_logs` | 500+ | Historical threat detection logs |
-| `threat_intel` | 50+ | Threat intelligence feed entries |
+| Collection | Records | Seed Script | Description |
+|---|---|---|---|
+| `urls` | 220+ | `seed_data` | Malicious & benign URL records with risk scores + threat intel feeds |
+| `threat_logs` | 500+ | `seed_data` | Historical threat detection logs |
+| `threat_signals` | 20+ | `seed_multi_collections` | Attack signals with voyage-3-large embeddings |
+| `infrastructure_intel` | 7+ | `seed_multi_collections` | DNS, TLS, hosting infrastructure data (Atlas Search) |
+| `regional_threats` | 7+ | `seed_multi_collections` | Multilingual threats (Hindi/Tamil/Bengali) with voyage-multilingual-2 embeddings |
+| `visual_intelligence` | 6+ | `seed_multi_collections` | Brand impersonation visual data with voyage-multimodal-3 embeddings |
+| `behavior_metrics` | 5+ | `seed_multi_collections` | Bot detection & traffic anomaly metrics (Atlas Search) |
+| `scan_rules` | 15+ | `seed_rule_examples` | Detection rule reference documents for vector similarity |
+| `campaigns` | — | Auto-generated | Detected coordinated attack campaigns (created at runtime) |
+| `url_edges` | — | Auto-generated | URL relationship graph edges (created at runtime) |
 
-If `VOYAGE_AI_API_KEY` is set in `.env`, it will also generate **1024-dimension vector embeddings** for each URL record using Voyage AI's `voyage-3` model. These embeddings power the Vector Search and Hybrid Search features.
+If `VOYAGE_AI_API_KEY` is set in `.env`, the seed scripts will also generate **vector embeddings** using the appropriate Voyage AI model for each collection. These embeddings power Vector Search and Hybrid Search.
 
 > **Tip:** If you skip the API key, seeding still works — but Vector Search won't return results until embeddings are generated.
 
@@ -104,9 +121,7 @@ If `VOYAGE_AI_API_KEY` is set in `.env`, it will also generate **1024-dimension 
 
 In the **MongoDB Atlas UI**, navigate to your cluster → **Atlas Search** → **Create Index**.
 
-Create **two indexes** on the `urls` collection:
-
-#### 5a. Atlas Search Index
+#### 5a. `urls` — Atlas Search Index
 
 - **Index Name:** `url_search_index`
 - **Collection:** `urls`
@@ -130,7 +145,7 @@ Create **two indexes** on the `urls` collection:
 }
 ```
 
-#### 5b. Vector Search Index
+#### 5b. `urls` — Vector Search Index
 
 - **Index Name:** `url_vector_index`
 - **Collection:** `urls`
@@ -147,7 +162,103 @@ Create **two indexes** on the `urls` collection:
 }
 ```
 
-> **Important:** Wait for both indexes to show status **Active** before proceeding. This typically takes 1–2 minutes.
+#### 5c. `threat_signals` — Vector Search Index
+
+- **Index Name:** `vs_threat_signals`
+- **Collection:** `threat_signals`
+- **Type:** Vector Search
+- **Configuration:**
+
+```json
+{
+  "fields": [
+    { "type": "vector", "path": "embedding", "numDimensions": 1024, "similarity": "cosine" },
+    { "type": "filter", "path": "attackCategory" },
+    { "type": "filter", "path": "threatClassification" }
+  ]
+}
+```
+
+#### 5d. `regional_threats` — Vector Search Index
+
+- **Index Name:** `vs_regional`
+- **Collection:** `regional_threats`
+- **Type:** Vector Search
+- **Configuration:**
+
+```json
+{
+  "fields": [
+    { "type": "vector", "path": "embedding", "numDimensions": 1024, "similarity": "cosine" },
+    { "type": "filter", "path": "language" },
+    { "type": "filter", "path": "region" }
+  ]
+}
+```
+
+#### 5e. `visual_intelligence` — Vector Search Index
+
+- **Index Name:** `vs_visual`
+- **Collection:** `visual_intelligence`
+- **Type:** Vector Search
+- **Configuration:**
+
+```json
+{
+  "fields": [
+    { "type": "vector", "path": "embedding", "numDimensions": 1024, "similarity": "cosine" },
+    { "type": "filter", "path": "brandName" },
+    { "type": "filter", "path": "type" }
+  ]
+}
+```
+
+#### 5f. `infrastructure_intel` — Atlas Search Index
+
+- **Index Name:** `infra_search_index`
+- **Collection:** `infrastructure_intel`
+- **Configuration:**
+
+```json
+{
+  "mappings": {
+    "dynamic": false,
+    "fields": {
+      "domain": { "type": "string", "analyzer": "lucene.keyword" },
+      "asn": { "type": "string", "analyzer": "lucene.keyword" },
+      "asnName": { "type": "string", "analyzer": "lucene.standard" },
+      "hostingProvider": { "type": "string", "analyzer": "lucene.keyword" },
+      "status": { "type": "stringFacet" },
+      "geoCountry": { "type": "stringFacet" },
+      "ipRotationCount24h": { "type": "number" },
+      "tlsSelfSigned": { "type": "boolean" }
+    }
+  }
+}
+```
+
+#### 5g. `behavior_metrics` — Atlas Search Index
+
+- **Index Name:** `behavior_search_index`
+- **Collection:** `behavior_metrics`
+- **Configuration:**
+
+```json
+{
+  "mappings": {
+    "dynamic": false,
+    "fields": {
+      "domain": { "type": "string", "analyzer": "lucene.keyword" },
+      "anomalyType": { "type": "string", "analyzer": "lucene.keyword" },
+      "isAnomaly": { "type": "boolean" },
+      "requestsPerMinute": { "type": "number" },
+      "zScoreRpm": { "type": "number" }
+    }
+  }
+}
+```
+
+> **Important:** Wait for all indexes to show status **Active** before proceeding. This typically takes 1–2 minutes per index.
 
 ---
 
