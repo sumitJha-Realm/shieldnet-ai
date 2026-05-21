@@ -19,46 +19,99 @@ A full-stack security platform for **NIC (National Informatics Centre)** that us
                         └──────────────────────┘
 ```
 
-## Quick Start
+---
+
+## Setup Guide
 
 ### Prerequisites
 
-- Python 3.11+
-- Node.js 20+
-- Poetry (`pip install poetry`)
-- MongoDB Atlas cluster with Search enabled
-- Voyage AI API key
-- Microsoft Foundry API key for agentic scan mode
+| Requirement | Minimum Version | Notes |
+|---|---|---|
+| Python | 3.11+ | Required for backend |
+| Node.js | 20+ | Required for frontend |
+| Poetry | Latest | Install via `pip install poetry` |
+| MongoDB Atlas | M0 (free) or higher | Must have **Search** enabled on the cluster |
+| Voyage AI API Key | — | Get from [voyageai.com](https://dash.voyageai.com/) |
+| Microsoft Foundry API Key | — | *(Optional)* Required only for agentic scan mode |
 
-### 1. Clone & Configure
+---
+
+### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/<your-org>/shieldnet-ai.git
+cd shieldnet-ai
+```
+
+---
+
+### Step 2: Configure Environment Variables
 
 ```bash
 cp .env.example .env
-# Edit .env with your MongoDB URI and Voyage AI key
-# Optional: also add your Foundry endpoint/key for Pipeline + Foundry scan mode
 ```
 
-### 2. Backend Setup
+Open `.env` and fill in **your** values:
+
+```env
+# Required
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
+VOYAGE_AI_API_KEY=<your-voyage-ai-api-key>
+
+# Optional — for Foundry-powered agentic scan mode
+GROVE_FOUNDRY_CHAT_URL=https://grove-gateway-prod.azure-api.net/grove-foundry-prod/openai/v1/chat/completions
+GROVE_API_KEY=<your-foundry-api-key>
+GROVE_FOUNDRY_MODEL=gpt-5.4
+```
+
+> **Note:** The `MONGODB_URI` must point to a MongoDB Atlas cluster (not a local MongoDB). Atlas Search and Vector Search features require Atlas.
+
+---
+
+### Step 3: Install Backend Dependencies
 
 ```bash
 cd backend
 poetry install
 ```
 
-### 3. Seed Database
+This installs FastAPI, Motor, Pydantic, httpx, dnspython, and all other backend dependencies.
+
+---
+
+### Step 4: Seed the Database
 
 ```bash
 cd backend
 poetry run python -m scripts.seed_data
 ```
 
-This generates 220+ URL records, 500+ threat logs, and 50+ threat intel feeds. If `VOYAGE_AI_API_KEY` is set, it also generates embeddings via Voyage AI.
+This command populates your MongoDB Atlas database (`shieldnet-ai`) with:
 
-### 4. Create Atlas Search Indexes
+| Collection | Records | Description |
+|---|---|---|
+| `urls` | 220+ | Sample malicious & benign URL records with risk scores |
+| `threat_logs` | 500+ | Historical threat detection logs |
+| `threat_intel` | 50+ | Threat intelligence feed entries |
 
-In MongoDB Atlas UI, create these indexes on the `urls` collection:
+If `VOYAGE_AI_API_KEY` is set in `.env`, it will also generate **1024-dimension vector embeddings** for each URL record using Voyage AI's `voyage-3` model. These embeddings power the Vector Search and Hybrid Search features.
 
-**Atlas Search Index** (`url_search_index`):
+> **Tip:** If you skip the API key, seeding still works — but Vector Search won't return results until embeddings are generated.
+
+---
+
+### Step 5: Create Atlas Search Indexes
+
+In the **MongoDB Atlas UI**, navigate to your cluster → **Atlas Search** → **Create Index**.
+
+Create **two indexes** on the `urls` collection:
+
+#### 5a. Atlas Search Index
+
+- **Index Name:** `url_search_index`
+- **Collection:** `urls`
+- **Configuration:**
+
 ```json
 {
   "mappings": {
@@ -77,7 +130,13 @@ In MongoDB Atlas UI, create these indexes on the `urls` collection:
 }
 ```
 
-**Vector Search Index** (`url_vector_index`):
+#### 5b. Vector Search Index
+
+- **Index Name:** `url_vector_index`
+- **Collection:** `urls`
+- **Type:** Vector Search
+- **Configuration:**
+
 ```json
 {
   "fields": [
@@ -88,14 +147,22 @@ In MongoDB Atlas UI, create these indexes on the `urls` collection:
 }
 ```
 
-### 5. Start Backend
+> **Important:** Wait for both indexes to show status **Active** before proceeding. This typically takes 1–2 minutes.
+
+---
+
+### Step 6: Start the Backend
 
 ```bash
 cd backend
 poetry run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### 6. Start Frontend
+The API will be available at `http://localhost:8000`. You can verify it's running by visiting `http://localhost:8000/docs` (Swagger UI).
+
+---
+
+### Step 7: Start the Frontend
 
 ```bash
 cd frontend
@@ -103,11 +170,40 @@ npm install
 npm run dev
 ```
 
-### 7. Docker Compose (Alternative)
+The frontend will be available at `http://localhost:3000`.
+
+---
+
+### Alternative: Docker Compose (One Command Setup)
+
+If you prefer running everything in containers:
 
 ```bash
 docker-compose up --build
 ```
+
+This starts both services:
+- **Frontend:** `http://localhost:3000`
+- **Backend:** `http://localhost:8000`
+
+> **Note:** You still need to create Atlas Search indexes manually (Step 5) and have your `.env` file configured (Step 2).
+
+---
+
+## Verification Checklist
+
+After setup, verify everything works:
+
+| Check | How |
+|---|---|
+| Backend is running | Visit `http://localhost:8000/docs` — Swagger UI loads |
+| Database is seeded | `GET http://localhost:8000/api/v1/dashboard/stats` returns counts > 0 |
+| Atlas Search works | Go to `/search` page, run a text query like "phishing login" |
+| Vector Search works | Go to `/search` page, run a semantic query (requires embeddings) |
+| Frontend loads | Visit `http://localhost:3000` — Dashboard with stats appears |
+| URL Scanner works | Go to `/scan`, enter any URL, click Scan |
+
+---
 
 ## Pages
 
@@ -146,3 +242,14 @@ docker-compose up --build
 - **Search**: Atlas Search + Vector Search + $rankFusion Hybrid
 - **Embeddings**: Voyage AI (voyage-3, 1024 dimensions)
 - **Containerization**: Docker + Docker Compose
+
+## Troubleshooting
+
+| Issue | Solution |
+|---|---|
+| `poetry: command not found` | Run `pip install poetry` or `pipx install poetry` |
+| `MONGODB_URI` connection error | Ensure your Atlas cluster allows connections from your IP (Network Access → Add Current IP) |
+| Search returns no results | Verify indexes are **Active** in Atlas UI; re-run seed if needed |
+| Vector Search returns empty | Ensure `VOYAGE_AI_API_KEY` was set before seeding; re-run `poetry run python -m scripts.seed_data` |
+| Frontend can't reach backend | Ensure backend is running on port 8000; check `NEXT_PUBLIC_API_URL` if using Docker |
+| Port already in use | Kill existing process: `lsof -ti:8000 | xargs kill` or change port in `.env` |
