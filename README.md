@@ -31,7 +31,7 @@ A full-stack security platform for **NIC (National Informatics Centre)** that us
 | Node.js | 20+ | Required for frontend |
 | Poetry | Latest | Install via `pip install poetry` |
 | MongoDB Atlas | M0 (free) or higher | Must have **Search** enabled on the cluster |
-| Voyage AI API Key | — | Get from [voyageai.com](https://dash.voyageai.com/) |
+| Voyage AI API Key | — | Get from [MongoDB Atlas UI](https://www.mongodb.com/docs/voyageai/management/api-keys/) (recommended), or from [voyageai.com](https://dash.voyageai.com/) (requires updating the embedding method in code) |
 | Microsoft Foundry API Key | — | *(Optional)* Required only for agentic scan mode |
 
 ---
