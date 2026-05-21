@@ -27,7 +27,7 @@ A full-stack security platform for **NIC (National Informatics Centre)** that us
 
 | Requirement | Minimum Version | Notes |
 |---|---|---|
-| Python | 3.11+ | Required for backend |
+| Python | 3.11, 3.12, or 3.13 | **Python 3.14 is NOT supported** (see Troubleshooting) |
 | Node.js | 20+ | Required for frontend |
 | Poetry | Latest | Install via `pip install poetry` |
 | MongoDB Atlas | M0 (free) or higher | Must have **Search** enabled on the cluster |
@@ -364,3 +364,42 @@ After setup, verify everything works:
 | Vector Search returns empty | Ensure `VOYAGE_AI_API_KEY` was set before seeding; re-run `poetry run python -m scripts.seed_data` |
 | Frontend can't reach backend | Ensure backend is running on port 8000; check `NEXT_PUBLIC_API_URL` if using Docker |
 | Port already in use | Kill existing process: `lsof -ti:8000 | xargs kill` or change port in `.env` |
+| `ModuleNotFoundError: No module named 'pydantic_core'` | You're using Python 3.14 which is **not supported**. See fix below. |
+
+### Python 3.14 Compatibility Issue
+
+If you see this error during `poetry install` or when running seed scripts:
+
+```
+ModuleNotFoundError: No module named 'pydantic_core'
+```
+
+**Cause:** `pydantic_core` is a compiled Rust extension that does not yet have pre-built wheels for Python 3.14. The project requires **Python 3.11, 3.12, or 3.13**.
+
+**Fix:** Switch to a supported Python version and recreate the virtualenv:
+
+```bash
+# Install Python 3.12 (macOS with Homebrew)
+brew install python@3.12
+
+# Remove the broken virtualenv
+cd backend
+poetry env remove python3.14
+
+# Tell Poetry to use the correct Python
+poetry env use $(brew --prefix python@3.12)/bin/python3.12
+
+# Reinstall dependencies
+poetry install
+```
+
+Alternatively, if using `pyenv`:
+
+```bash
+pyenv install 3.12.8
+pyenv local 3.12.8
+poetry env use $(pyenv which python)
+poetry install
+```
+
+After switching, re-run the seed scripts and they will work correctly.
